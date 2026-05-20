@@ -16,8 +16,6 @@ backends. This script provides an LLM-judge factuality score in the same output
 column so downstream CSV analysis stays simple.
 """
 
-from __future__ import annotations
-
 import argparse
 import ast
 import csv
@@ -28,42 +26,41 @@ import re
 import sys
 import time
 from collections import defaultdict
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 from urllib import error, request
 
 
 NO_INFO_NUGGET = "Not enough information, no answer found"
 
 
-@dataclass
 class GeneratedAnswerPart:
-    text: str
-    citations: list[str]
+    def __init__(self, text, citations):
+        self.text = text
+        self.citations = citations
 
 
-@dataclass
 class RAGRun:
-    query_id: str
-    query: str
-    query_run: str
-    retrieved_passages: dict[str, str]
-    generated_answer_raw: str
-    generated_answer_parts: list[GeneratedAnswerPart]
+    def __init__(self, query_id, query, query_run, retrieved_passages, generated_answer_raw, generated_answer_parts):
+        self.query_id = query_id
+        self.query = query
+        self.query_run = query_run
+        self.retrieved_passages = retrieved_passages
+        self.generated_answer_raw = generated_answer_raw
+        self.generated_answer_parts = generated_answer_parts
 
 
 class OpenAICompatibleClient:
     def __init__(
         self,
-        chat_base_url: str,
-        chat_api_key: str,
-        chat_model: str,
-        embedding_base_url: str | None = None,
-        embedding_api_key: str | None = None,
-        embedding_model: str | None = None,
-        timeout: int = 120,
-        retries: int = 2,
-    ) -> None:
+        chat_base_url,
+        chat_api_key,
+        chat_model,
+        embedding_base_url=None,
+        embedding_api_key=None,
+        embedding_model=None,
+        timeout=120,
+        retries=2,
+    ):
         self.chat_url = chat_base_url.rstrip("/") + "/chat/completions"
         self.chat_api_key = chat_api_key
         self.chat_model = chat_model
@@ -78,8 +75,8 @@ class OpenAICompatibleClient:
         self.input_tokens = 0
         self.output_tokens = 0
 
-    def chat(self, prompt: str, max_tokens: int | None = None) -> str:
-        payload: dict[str, Any] = {
+    def chat(self, prompt, max_tokens=None):
+        payload = {
             "model": self.chat_model,
             "messages": [
                 {
@@ -99,20 +96,20 @@ class OpenAICompatibleClient:
         self.output_tokens += int(usage.get("completion_tokens") or 0)
         return data["choices"][0]["message"]["content"].strip()
 
-    def embeddings(self, texts: list[str]) -> list[list[float]]:
+    def embeddings(self, texts):
         if not self.embedding_url or not self.embedding_model:
             raise ValueError("Embedding endpoint/model is required for semantic similarity.")
         payload = {"model": self.embedding_model, "input": texts}
         data = self._post_json(self.embedding_url, self.embedding_api_key, payload)
         return [item["embedding"] for item in data["data"]]
 
-    def _post_json(self, url: str, api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _post_json(self, url, api_key, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
-        last_error: Exception | None = None
+        last_error = None
         for attempt in range(self.retries + 1):
             req = request.Request(url, data=body, headers=headers, method="POST")
             try:
@@ -125,14 +122,14 @@ class OpenAICompatibleClient:
         raise RuntimeError(f"Request failed for {url}: {last_error}")
 
 
-def normalize_citations(text: str) -> str:
+def normalize_citations(text):
     return re.sub(r"\[ID:(\d+)\]", r"[\1]", text, flags=re.IGNORECASE)
 
 
-def parse_generated_answer(text: str) -> list[GeneratedAnswerPart]:
+def parse_generated_answer(text):
     text = normalize_citations(text)
 
-    def expand_multi(match: re.Match[str]) -> str:
+    def expand_multi(match):
         return "".join(f"[{num}]" for num in re.findall(r"\d+", match.group()))
 
     text = re.sub(r"\[\d+(?:,\s*\d+)+\]", expand_multi, text)
@@ -141,7 +138,7 @@ def parse_generated_answer(text: str) -> list[GeneratedAnswerPart]:
     if not citation_blocks:
         return [GeneratedAnswerPart(text=text.strip(), citations=[])]
 
-    parts: list[GeneratedAnswerPart] = []
+    parts = []
     for idx, block in enumerate(citation_blocks):
         text_start = 0 if idx == 0 else citation_blocks[idx - 1].end()
         text_part = text[text_start:block.start()].strip()
@@ -155,19 +152,19 @@ def parse_generated_answer(text: str) -> list[GeneratedAnswerPart]:
     return parts
 
 
-def generated_text(parts: list[GeneratedAnswerPart]) -> str:
+def generated_text(parts):
     return " ".join(part.text for part in parts).strip()
 
 
-def load_rag_runs(path: str) -> list[RAGRun]:
-    grouped: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
+def load_rag_runs(path):
+    grouped = defaultdict(list)
     with open(path, newline="", encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             qid = row.get("query_id", "").strip()
             run_id = row.get("query_run", "1").strip() or "1"
             grouped[(qid, run_id)].append(row)
 
-    runs: list[RAGRun] = []
+    runs = []
     for (qid, run_id), rows in grouped.items():
         query = rows[0]["query"]
         passages = {
@@ -186,12 +183,12 @@ def load_rag_runs(path: str) -> list[RAGRun]:
     return runs
 
 
-def load_golden(path: str) -> dict[str, dict[str, str]]:
+def load_golden(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
         return {row["query_id"]: row for row in csv.DictReader(f)}
 
 
-def parse_json_obj(text: str) -> dict[str, Any]:
+def parse_json_obj(text):
     text = strip_code_fences(text)
     try:
         return json.loads(text)
@@ -202,7 +199,7 @@ def parse_json_obj(text: str) -> dict[str, Any]:
     raise ValueError(f"Expected JSON object, got: {text[:300]}")
 
 
-def parse_list(text: str) -> list[str]:
+def parse_list(text):
     text = strip_code_fences(text)
     try:
         value = json.loads(text)
@@ -216,14 +213,14 @@ def parse_list(text: str) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
-def strip_code_fences(text: str) -> str:
+def strip_code_fences(text):
     text = text.strip()
     text = re.sub(r"^```(?:json|python)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     return text.strip()
 
 
-def cosine_similarity(a: list[float], b: list[float]) -> float:
+def cosine_similarity(a, b):
     dot = sum(x * y for x, y in zip(a, b))
     norm_a = math.sqrt(sum(x * x for x in a))
     norm_b = math.sqrt(sum(y * y for y in b))
@@ -232,8 +229,8 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
-def compute_umbrela(client: OpenAICompatibleClient, run: RAGRun, k_values: list[int]) -> dict[str, Any]:
-    scores: dict[str, int] = {}
+def compute_umbrela(client, run, k_values):
+    scores = {}
     for pid, passage in run.retrieved_passages.items():
         prompt = f"""
 Given a query and a passage, provide a score on an integer scale of 0 to 3:
@@ -258,7 +255,7 @@ Return only one integer: 0, 1, 2, or 3.
         scores[pid] = int(match.group())
 
     binary = [1 if score >= 2 else 0 for score in scores.values()]
-    retrieval_scores: dict[str, Any] = {"precision@": {}, "AP@": {}}
+    retrieval_scores = {"precision@": {}, "AP@": {}}
     for k in k_values:
         if k > len(binary):
             continue
@@ -273,7 +270,7 @@ Return only one integer: 0, 1, 2, or 3.
     }
 
 
-def average_precision(binary: list[int], total_relevant: int) -> float:
+def average_precision(binary, total_relevant):
     if total_relevant == 0:
         return 0.0
     precisions = []
@@ -285,21 +282,21 @@ def average_precision(binary: list[int], total_relevant: int) -> float:
     return sum(precisions) / len(precisions) if precisions else 0.0
 
 
-def mrr(binary: list[int]) -> float:
+def mrr(binary):
     for idx, is_relevant in enumerate(binary, start=1):
         if is_relevant:
             return 1.0 / idx
     return 0.0
 
 
-def compute_autonugget(client: OpenAICompatibleClient, run: RAGRun, umbrela_scores: dict[str, int]) -> dict[str, Any]:
+def compute_autonugget(client, run, umbrela_scores):
     filtered = [
         passage
         for pid, passage in run.retrieved_passages.items()
         if umbrela_scores.get(pid, 0) >= 1
     ]
     context = "\n".join(f"[{idx + 1}] {text}" for idx, text in enumerate(filtered))
-    nuggets: list[str] = []
+    nuggets = []
     for _ in range(5):
         prompt = f"""
 Update the list of atomic nuggets of information so they best provide all information required for the query.
@@ -318,7 +315,7 @@ Initial Nugget List: {json.dumps(nuggets, ensure_ascii=False)}
             nuggets = nuggets[:30]
             break
 
-    labels: list[str] = []
+    labels = []
     for chunk in chunks(nuggets, 10):
         prompt = f"""
 Label each nugget as "vital" or "okay" for the search query.
@@ -335,7 +332,7 @@ Nugget List: {json.dumps(chunk, ensure_ascii=False)}
     sorted_labels = [pair[1] for pair in sorted_pairs]
     answer = generated_text(run.generated_answer_parts)
 
-    assignments: list[str] = []
+    assignments = []
     for chunk in chunks(sorted_nuggets, 10):
         prompt = f"""
 For each nugget, label whether it is captured by the generated answer.
@@ -369,14 +366,14 @@ Nugget List: {json.dumps(chunk, ensure_ascii=False)}
     }
 
 
-def evaluate_nuggets(nuggets: list[str], labels: list[str], assignments: list[str]) -> dict[str, float]:
+def evaluate_nuggets(nuggets, labels, assignments):
     score_map = {"support": 1.0, "partial_support": 0.5, "not_support": 0.0}
-    vital_scores: list[float] = []
-    okay_scores: list[float] = []
-    strict_vital_scores: list[float] = []
-    strict_okay_scores: list[float] = []
-    all_scores: list[float] = []
-    all_strict_scores: list[float] = []
+    vital_scores = []
+    okay_scores = []
+    strict_vital_scores = []
+    strict_okay_scores = []
+    all_scores = []
+    all_strict_scores = []
     for label, assignment in zip(labels, assignments):
         score = score_map.get(assignment, 0.0)
         strict = 1.0 if assignment == "support" else 0.0
@@ -402,10 +399,10 @@ def evaluate_nuggets(nuggets: list[str], labels: list[str], assignments: list[st
     }
 
 
-def compute_citation(client: OpenAICompatibleClient, run: RAGRun) -> dict[str, Any]:
+def compute_citation(client, run):
     score_map = {"full_support": 1.0, "partial_support": 0.5, "no_support": 0.0}
-    citation_to_scores: dict[str, list[float]] = defaultdict(list)
-    part_to_scores: dict[str, list[float]] = defaultdict(list)
+    citation_to_scores = defaultdict(list)
+    part_to_scores = defaultdict(list)
     for idx, part in enumerate(run.generated_answer_parts, start=1):
         if not part.citations:
             part_to_scores[f"part_score_{idx}"] = []
@@ -444,7 +441,7 @@ Citation:
     }
 
 
-def compute_no_answer(client: OpenAICompatibleClient, run: RAGRun) -> dict[str, str]:
+def compute_no_answer(client, run):
     prompt = f"""
 Determine whether the answer is an attempt to answer the query.
 Do not judge correctness. If it attempts to answer, return yes. If it says it cannot answer or lacks information, return no.
@@ -461,7 +458,7 @@ Answer:
     return {"query_answered": answered}
 
 
-def compute_hallucination_llm(client: OpenAICompatibleClient, run: RAGRun) -> float:
+def compute_hallucination_llm(client, run):
     sources = "\n\n".join(run.retrieved_passages.values())
     answer = generated_text(run.generated_answer_parts)
     prompt = f"""
@@ -479,7 +476,7 @@ Generated answer:
     return max(0.0, min(1.0, score))
 
 
-def compute_golden(client: OpenAICompatibleClient, run: RAGRun, expected_answer: str) -> dict[str, Any]:
+def compute_golden(client, run, expected_answer):
     answer = generated_text(run.generated_answer_parts)
     emb = client.embeddings([answer, expected_answer])
     semantic = cosine_similarity(emb[0], emb[1])
@@ -487,8 +484,8 @@ def compute_golden(client: OpenAICompatibleClient, run: RAGRun, expected_answer:
     expected_claims = extract_claims(client, expected_answer)
     if not generated_claims or not expected_claims:
         precision = recall = f1 = 0.0
-        precision_verdicts: list[dict[str, str]] = []
-        recall_verdicts: list[dict[str, str]] = []
+        precision_verdicts = []
+        recall_verdicts = []
     else:
         precision_verdicts = verify_claims(client, generated_claims, expected_answer)
         recall_verdicts = verify_claims(client, expected_claims, answer)
@@ -507,7 +504,7 @@ def compute_golden(client: OpenAICompatibleClient, run: RAGRun, expected_answer:
     }
 
 
-def extract_claims(client: OpenAICompatibleClient, text: str) -> list[str]:
+def extract_claims(client, text):
     prompt = f"""
 Extract all atomic factual claims from the text.
 Each claim should be a single verifiable statement.
@@ -520,7 +517,7 @@ Text:
     return [str(claim).strip() for claim in claims if str(claim).strip()]
 
 
-def verify_claims(client: OpenAICompatibleClient, claims: list[str], reference: str) -> list[dict[str, str]]:
+def verify_claims(client, claims, reference):
     prompt = f"""
 For each claim, determine whether it is "entailment", "contradiction", or "neutral" with respect to the reference text.
 Return JSON only: {{"verdicts": [{{"claim": "...", "verdict": "entailment"}}]}}
@@ -541,13 +538,13 @@ Claims:
     return normalized
 
 
-def entailment_ratio(verdicts: list[dict[str, str]]) -> float:
+def entailment_ratio(verdicts):
     if not verdicts:
         return 0.0
     return sum(1 for item in verdicts if item.get("verdict") == "entailment") / len(verdicts)
 
 
-def normalize_values(values: list[str], allowed: set[str]) -> list[str]:
+def normalize_values(values, allowed):
     normalized = []
     for value in values:
         lowered = str(value).strip().lower()
@@ -561,15 +558,15 @@ def normalize_values(values: list[str], allowed: set[str]) -> list[str]:
     return normalized
 
 
-def chunks(items: list[str], size: int) -> list[list[str]]:
+def chunks(items, size):
     return [items[idx:idx + size] for idx in range(0, len(items), size)]
 
 
-def json_cell(value: Any) -> str:
+def json_cell(value):
     return json.dumps(value, ensure_ascii=False)
 
 
-def evaluate(args: argparse.Namespace) -> None:
+def evaluate(args: argparse.Namespace):
     client = OpenAICompatibleClient(
         chat_base_url=args.chat_base_url,
         chat_api_key=args.chat_api_key,
@@ -584,14 +581,14 @@ def evaluate(args: argparse.Namespace) -> None:
     runs = load_rag_runs(args.answers_csv)
     k_values = [int(k) for k in args.k_values.split(",") if k.strip()]
 
-    rows: list[dict[str, Any]] = []
+    rows = []
     total = len(runs)
     for idx, run in enumerate(runs, start=1):
         print(f"[{idx}/{total}] evaluating {run.query_id} run {run.query_run}: {run.query}", file=sys.stderr)
         client.input_tokens = 0
         client.output_tokens = 0
 
-        row: dict[str, Any] = {
+        row = {
             "query_id": run.query_id,
             "query": run.query,
             "query_run": run.query_run,
@@ -647,10 +644,10 @@ def evaluate(args: argparse.Namespace) -> None:
     print(f"Wrote {len(rows)} rows to {args.output_csv}", file=sys.stderr)
 
 
-def write_csv(path: str, rows: list[dict[str, Any]]) -> None:
+def write_csv(path, rows):
     if not rows:
         return
-    fieldnames: list[str] = []
+    fieldnames = []
     for row in rows:
         for key in row:
             if key not in fieldnames:
@@ -661,11 +658,11 @@ def write_csv(path: str, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def env_or_default(name: str, default: str | None = None) -> str | None:
+def env_or_default(name, default=None):
     return os.environ.get(name) or default
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate RAG CSV with OpenAI-compatible local models.")
     parser.add_argument("--answers-csv", default="data/chat.csv")
     parser.add_argument("--golden-csv", default="data/qa_golden.csv")
