@@ -1,0 +1,24 @@
+services:
+  rag-eval-dev:
+    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    container_name: rag-eval-dev
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - uv-cache:/root/.cache/uv
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: >
+      bash -lc "python --version &&
+      uv --version &&
+      echo 'Container is ready. Run: docker compose exec rag-eval-dev bash' &&
+      tail -f /dev/null"
+    stdin_open: true
+    tty: true
+
+volumes:
+  uv-cache:
