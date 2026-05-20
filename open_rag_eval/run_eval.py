@@ -293,6 +293,18 @@ def _omit_empty_consistency(report: dict) -> dict:
     return {k: v for k, v in report.items() if k != "consistency" or v}
 
 
+def _resolve_existing_path(path: str, results_folder: str) -> str:
+    """Resolve a configured input path, preserving existing absolute/relative files.
+
+    Connectors write generated answers under results_folder, but precomputed answer
+    files are commonly stored elsewhere, such as data/chat.csv.
+    """
+    if os.path.exists(path):
+        return path
+
+    return os.path.join(results_folder, path)
+
+
 def _print_token_usage_summary(results, evaluator_type: str):
     """
     Print a summary of token usage across all evaluation results.
@@ -398,7 +410,7 @@ def run_eval(config_path: str):
                 num_golden = queries_df['expected_answer'].notna().sum()
                 print(f"Loaded {num_golden} golden answers from {queries_path}")
 
-    answer_path = os.path.join(results_folder, config.generated_answers)
+    answer_path = _resolve_existing_path(config.generated_answers, results_folder)
     rag_results = RAGResultsLoader(answer_path, queries_df=queries_df).load()
 
     # Run evaluation

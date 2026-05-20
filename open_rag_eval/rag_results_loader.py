@@ -119,6 +119,9 @@ class RAGResultsLoader:
 
     def _parse_generated_answer(self, text: str) -> List[GeneratedAnswerPart]:
         """Extracts text associated with numbered reference markers from a given string."""
+        # Some systems emit citations as [ID:3] while the evaluator internally
+        # expects the same numeric marker format used by passage_id, e.g. [3].
+        text = re.sub(r"\[ID:(\d+)\]", r"[\1]", text, flags=re.IGNORECASE)
 
         # First, expand multi-number citations like [1, 2, 3] to [1][2][3]
         def expand_multi_number_citation(match):

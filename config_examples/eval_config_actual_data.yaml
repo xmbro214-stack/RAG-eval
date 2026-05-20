@@ -1,0 +1,24 @@
+# Evaluation config for the local data/QA List.xlsx + data/chat.csv dataset.
+#
+# Generate data/qa_golden.csv first:
+#   python3 scripts/prepare_actual_data.py
+
+input_queries: "data/qa_golden.csv"
+
+results_folder: "results_actual/"
+generated_answers: "data/chat.csv"
+eval_results_file: "results.csv"
+metrics_file: "metrics.png"
+
+evaluator:
+  - type: "GoldenAnswerEvaluator"
+    model:
+      type: "OpenAIModel"
+      name: "gpt-4o-mini"
+      api_key: ${oc.env:OPENAI_API_KEY}
+    embedding_model:
+      type: "OpenAIEmbeddingModel"
+      name: "text-embedding-3-large"
+      api_key: ${oc.env:OPENAI_API_KEY}
+    options:
+      run_consistency: false

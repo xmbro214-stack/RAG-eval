@@ -146,6 +146,19 @@ class TestRAGResultsLoader(unittest.TestCase):
             [GeneratedAnswerPart(text="There are seven planets with moon", citations=["[1]"])]
         )
 
+    def test_parse_id_style_citations(self):
+        parsed = self.loader._parse_generated_answer(
+            "SM94 is a solder resist dent [ID:3]. It can be caused by fixtures [ID:14][ID:15]."
+        )
+
+        self.assertEqual(
+            parsed,
+            [
+                GeneratedAnswerPart(text="SM94 is a solder resist dent", citations=["[3]"]),
+                GeneratedAnswerPart(text=". It can be caused by fixtures", citations=["[14]", "[15]"]),
+            ]
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
