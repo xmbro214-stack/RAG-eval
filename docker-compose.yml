@@ -2,9 +2,10 @@ services:
   rag-eval-dev:
     image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
     container_name: rag-eval-dev
+    user: "0:0"
     working_dir: /workspace
     volumes:
-      - .:/workspace
+      - .:/workspace:z
       - uv-cache:/root/.cache/uv
     env_file:
       - .env
