@@ -167,3 +167,6 @@ cython_debug/
 queries.csv
 results/
 tests/outputs
+.DS_Store
+data/local_eval_results.csv
+data/recall_metrics_summary.csv

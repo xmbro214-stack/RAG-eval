@@ -569,7 +569,25 @@ def json_cell(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+def log(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def log_step_done(name: str, started_at: float) -> None:
+    log(f"    ✓ {name} done in {time.perf_counter() - started_at:.2f}s")
+
+
 def evaluate(args: argparse.Namespace) -> None:
+    total_started_at = time.perf_counter()
+    log("Starting local OpenAI-compatible RAG evaluation")
+    log(f"  answers_csv={args.answers_csv}")
+    log(f"  golden_csv={args.golden_csv or '<disabled>'}")
+    log(f"  output_csv={args.output_csv}")
+    log(f"  chat_base_url={args.chat_base_url}")
+    log(f"  chat_model={args.chat_model}")
+    log(f"  embedding_base_url={args.embedding_base_url}")
+    log(f"  embedding_model={args.embedding_model}")
+
     client = OpenAICompatibleClient(
         chat_base_url=args.chat_base_url,
         chat_api_key=args.chat_api_key,
@@ -580,14 +598,27 @@ def evaluate(args: argparse.Namespace) -> None:
         timeout=args.timeout,
         retries=args.retries,
     )
+
+    load_started_at = time.perf_counter()
     golden = load_golden(args.golden_csv) if args.golden_csv else {}
     runs = load_rag_runs(args.answers_csv)
     k_values = [int(k) for k in args.k_values.split(",") if k.strip()]
+    log(
+        f"Loaded {len(runs)} answer runs, {len(golden)} golden answers, "
+        f"k_values={k_values} in {time.perf_counter() - load_started_at:.2f}s"
+    )
 
     rows: list[dict[str, Any]] = []
     total = len(runs)
     for idx, run in enumerate(runs, start=1):
-        print(f"[{idx}/{total}] evaluating {run.query_id} run {run.query_run}: {run.query}", file=sys.stderr)
+        run_started_at = time.perf_counter()
+        log("")
+        log(f"[{idx}/{total}] {run.query_id} run {run.query_run}: {run.query}")
+        log(
+            f"    passages={len(run.retrieved_passages)}, "
+            f"answer_parts={len(run.generated_answer_parts)}, "
+            f"answer_chars={len(run.generated_answer_raw)}"
+        )
         client.input_tokens = 0
         client.output_tokens = 0
 
@@ -598,11 +629,38 @@ def evaluate(args: argparse.Namespace) -> None:
             "generated_answer": generated_text(run.generated_answer_parts),
         }
 
+        step_started_at = time.perf_counter()
+        log("    → UMBRELA retrieval scoring...")
         umbrella = compute_umbrela(client, run, k_values)
+        log_step_done(
+            f"UMBRELA mean={umbrella['mean_umbrela_score']:.4f}",
+            step_started_at,
+        )
+
+        step_started_at = time.perf_counter()
+        log("    → AutoNugget generation scoring...")
         autonugget = compute_autonugget(client, run, umbrella["umbrela_scores"])
+        log_step_done(
+            f"AutoNugget vital={autonugget['vital_nuggetizer_score']:.4f}, "
+            f"assign_mean={autonugget['mean_nugget_assignment_score']:.4f}, "
+            f"nuggets={len(autonugget['nuggets'])}",
+            step_started_at,
+        )
+
+        step_started_at = time.perf_counter()
+        log("    → Citation support scoring...")
         citation = compute_citation(client, run)
+        log_step_done(f"Citation f1={citation['f1']:.4f}", step_started_at)
+
+        step_started_at = time.perf_counter()
+        log("    → No-answer detection...")
         no_answer = compute_no_answer(client, run)
+        log_step_done(f"No-answer query_answered={no_answer['query_answered']}", step_started_at)
+
+        step_started_at = time.perf_counter()
+        log("    → Hallucination/source-support scoring...")
         hallucination = compute_hallucination_llm(client, run)
+        log_step_done(f"Hallucination/source-support={hallucination:.4f}", step_started_at)
 
         row.update({
             "retrieval_score_umbrela_scores": json_cell(umbrella["umbrela_scores"]),
@@ -624,8 +682,17 @@ def evaluate(args: argparse.Namespace) -> None:
         })
 
         if run.query_id in golden:
+            step_started_at = time.perf_counter()
+            log("    → Golden-answer semantic/factual scoring...")
             expected = golden[run.query_id]["expected_answer"]
             golden_scores = compute_golden(client, run, expected)
+            log_step_done(
+                f"Golden semantic={golden_scores['semantic_similarity']:.4f}, "
+                f"factual_f1={golden_scores['factual_correctness_f1']:.4f}, "
+                f"generated_claims={len(golden_scores['generated_claims'])}, "
+                f"expected_claims={len(golden_scores['expected_claims'])}",
+                step_started_at,
+            )
             row.update({
                 "generation_score_semantic_similarity": golden_scores["semantic_similarity"],
                 "generation_score_factual_correctness_precision": golden_scores["factual_correctness_precision"],
@@ -637,14 +704,25 @@ def evaluate(args: argparse.Namespace) -> None:
                 "generation_score_precision_verdicts": json_cell(golden_scores["precision_verdicts"]),
                 "generation_score_recall_verdicts": json_cell(golden_scores["recall_verdicts"]),
             })
+        else:
+            log("    → Golden-answer scoring skipped: no expected_answer for query_id")
 
         row["total_input_tokens"] = client.input_tokens
         row["total_output_tokens"] = client.output_tokens
         row["total_tokens"] = client.input_tokens + client.output_tokens
         rows.append(row)
+        log(
+            f"    ✓ run complete in {time.perf_counter() - run_started_at:.2f}s; "
+            f"tokens in/out/total={row['total_input_tokens']}/"
+            f"{row['total_output_tokens']}/{row['total_tokens']}"
+        )
 
+    write_started_at = time.perf_counter()
+    log("")
+    log(f"Writing {len(rows)} rows to {args.output_csv}...")
     write_csv(args.output_csv, rows)
-    print(f"Wrote {len(rows)} rows to {args.output_csv}", file=sys.stderr)
+    log_step_done("CSV write", write_started_at)
+    log(f"Finished evaluation in {time.perf_counter() - total_started_at:.2f}s")
 
 
 def write_csv(path: str, rows: list[dict[str, Any]]) -> None:
