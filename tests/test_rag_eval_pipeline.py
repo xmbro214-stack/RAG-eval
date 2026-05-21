@@ -119,6 +119,15 @@ class TestRagEvalPipeline(unittest.TestCase):
             self.assertEqual(eval_cmd[eval_cmd.index("--answers-csv") + 1], str(task.generated_answers_csv))
             self.assertEqual(eval_cmd[eval_cmd.index("--output-csv") + 1], str(task.eval_result_csv))
 
+    def test_null_optional_values_are_not_added_to_commands(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = sample_config(tmp)
+            config["generation"]["max_tokens"] = None
+            task = pipeline.expand_tasks(config)[0]
+
+            gen_cmd = pipeline.build_generation_command(config, task)
+            self.assertNotIn("--max-tokens", gen_cmd)
+
     def test_run_pipeline_dry_run_returns_entries_for_requested_stage(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = sample_config(tmp)

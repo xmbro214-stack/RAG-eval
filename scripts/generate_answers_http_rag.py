@@ -103,7 +103,7 @@ class HTTPJSONClient:
                     text = resp.read().decode("utf-8")
                     return json.loads(text) if text else {}
             except (error.HTTPError, error.URLError, TimeoutError) as exc:
-                last_error = exc
+                last_error = describe_http_error(exc)
                 if attempt < self.retries:
                     time.sleep(1.5 * (attempt + 1))
         raise RuntimeError(f"Request failed for {url}: {last_error}")
@@ -157,6 +157,18 @@ def chat_completions_url(base_url: str) -> str:
     if base_url.endswith("/chat/completions"):
         return base_url
     return f"{base_url}/chat/completions"
+
+
+def describe_http_error(exc: Exception) -> str:
+    if isinstance(exc, error.HTTPError):
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            body = ""
+        if body:
+            return f"HTTPError {exc.code} {exc.reason}: {body}"
+        return f"HTTPError {exc.code} {exc.reason}"
+    return str(exc)
 
 
 def log(message: str) -> None:

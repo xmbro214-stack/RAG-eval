@@ -101,13 +101,10 @@ class OpenAICompatibleClient:
         timeout: int = 120,
         retries: int = 2,
     ) -> None:
-        self.chat_url = chat_base_url.rstrip("/") + "/chat/completions"
+        self.chat_url = chat_completions_url(chat_base_url)
         self.chat_api_key = chat_api_key
         self.chat_model = chat_model
-        self.embedding_url = (
-            embedding_base_url.rstrip("/") + "/embeddings"
-            if embedding_base_url else None
-        )
+        self.embedding_url = embeddings_url(embedding_base_url)
         self.embedding_api_key = embedding_api_key or chat_api_key
         self.embedding_model = embedding_model
         self.timeout = timeout
@@ -156,10 +153,38 @@ class OpenAICompatibleClient:
                 with request.urlopen(req, timeout=self.timeout) as resp:
                     return json.loads(resp.read().decode("utf-8"))
             except (error.HTTPError, error.URLError, TimeoutError) as exc:
-                last_error = exc
+                last_error = describe_http_error(exc)
                 if attempt < self.retries:
                     time.sleep(1.5 * (attempt + 1))
         raise RuntimeError(f"Request failed for {url}: {last_error}")
+
+
+def chat_completions_url(base_url: str) -> str:
+    base_url = base_url.rstrip("/")
+    if base_url.endswith("/chat/completions"):
+        return base_url
+    return f"{base_url}/chat/completions"
+
+
+def embeddings_url(base_url: str | None) -> str | None:
+    if not base_url:
+        return None
+    base_url = base_url.rstrip("/")
+    if base_url.endswith("/embeddings"):
+        return base_url
+    return f"{base_url}/embeddings"
+
+
+def describe_http_error(exc: Exception) -> str:
+    if isinstance(exc, error.HTTPError):
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            body = ""
+        if body:
+            return f"HTTPError {exc.code} {exc.reason}: {body}"
+        return f"HTTPError {exc.code} {exc.reason}"
+    return str(exc)
 
 
 def normalize_citations(text: str) -> str:
