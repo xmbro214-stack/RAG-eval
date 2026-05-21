@@ -35,6 +35,43 @@ from urllib import error, request
 
 NO_INFO_NUGGET = "Not enough information, no answer found"
 
+UMBRELA_FEW_SHOT_EXAMPLES = """
+Few-shot scoring examples from PCB defect knowledge-base evaluation:
+
+Example A:
+Query: What is CU64 M1?
+Perfect standard answer: CU64 M1 is bad copper adhesion with fixed-unit and fixed-location crush. The root cause is foreign material on the LXP work stage causing fixed-location dry-film crush or scratch.
+Retrieved chunk: CU64 M1: Fixed unit and fixed location crush of bad copper adhesion. Potential RC: FM on LXP work stage caused fixed location dry film crush or scratch. Improvement: LXP outgoing VI check dry film surface; check and clean LXP work stage regularly.
+Score: 3
+Reason: the chunk can directly support the main definition and root cause in the standard answer.
+
+Example B:
+Query: What is CU64 M1?
+Perfect standard answer: CU64 M1 is bad copper adhesion with fixed-unit and fixed-location crush. The root cause is foreign material on the LXP work stage causing fixed-location dry-film crush or scratch.
+Retrieved chunk: CU64 M2: Bad copper adhesion with trace lifting on panel handling area. Potential root cause: operator violates manual handling rules and touches pattern area.
+Score: 1
+Reason: the chunk is about the same defect family and shares terminology, but it answers a different mode and cannot support the CU64 M1 answer.
+
+Example C:
+Query: What is SM94?
+Perfect standard answer: SM94 is a visible depression/dent on the solder resist surface. SM94 M1 is a dent on plastic body/C4 areas; SM94 M3 is top-side SR undulation. Reject criteria include single SR dent >40 mils / >1mm visible at POR magnification.
+Retrieved chunk: SM94 M1 Defect Criteria: Reject for single SR dent >40 mils in any direction and visible at POR inspection magnification. Accept SR Dent if there is no SR damage/crack and no exposed underlying metal or inner-layer deformation.
+Score: 2
+Reason: the chunk supports important criteria, but does not fully cover the whole standard answer.
+"""
+
+NUGGET_FEW_SHOT_EXAMPLES = """
+Few-shot nugget examples:
+
+Query: What is CU64 M1?
+Perfect standard answer: CU64 M1 is bad copper adhesion with fixed-unit and fixed-location crush. The root cause is FM on the LXP work stage causing fixed-location dry-film crush or scratch.
+Good nuggets: ["CU64 M1 is bad copper adhesion", "CU64 M1 is fixed-unit fixed-location crush", "FM on LXP work stage causes dry-film crush or scratch", "LXP outgoing VI checks dry-film surface", "LXP work stage should be checked and cleaned regularly"]
+
+Query: What is SM94?
+Perfect standard answer: SM94 is a visible depression/dent on the solder resist surface. SM94 M1 covers plastic body and C4 areas. SM94 M3 is top-side SR undulation.
+Good nuggets: ["SM94 is a visible SR surface depression", "SM94 M1 is dent on plastic body and C4 areas", "SM94 M3 is top-side SR undulation", "Reject single SR dent greater than 40 mils", "Accept SR dent if no SR damage or metal exposure"]
+"""
+
 
 @dataclass
 class GeneratedAnswerPart:
@@ -232,21 +269,43 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
-def compute_umbrela(client: OpenAICompatibleClient, run: RAGRun, k_values: list[int]) -> dict[str, Any]:
+def expected_answer_block(expected_answer: str | None) -> str:
+    if not expected_answer:
+        return (
+            "No expert standard answer is available for this query. "
+            "Score using only the query intent and the retrieved chunk."
+        )
+    return f"Perfect expert standard answer for this query:\n{expected_answer}"
+
+
+def compute_umbrela(
+    client: OpenAICompatibleClient,
+    run: RAGRun,
+    k_values: list[int],
+    expected_answer: str | None = None,
+) -> dict[str, Any]:
     scores: dict[str, int] = {}
     for pid, passage in run.retrieved_passages.items():
         prompt = f"""
-Given a query and a passage, provide a score on an integer scale of 0 to 3:
-0 = passage has nothing to do with the query
-1 = passage is related but does not answer it
-2 = passage contains some answer, but unclear or mixed with extra information
-3 = passage is dedicated to the query and contains the exact answer
+You are evaluating a retrieved text chunk for a PCB defect RAG system.
+Use the query and, when available, the perfect expert standard answer as the target.
+
+Score the retrieved chunk on an integer scale from 0 to 3:
+0 = unrelated to the query and standard answer
+1 = related terminology/topic, but it cannot support the standard answer
+2 = supports part of the standard answer, but is incomplete or mixed with extra information
+3 = can directly and substantially support the standard answer
 
 Return only one integer: 0, 1, 2, or 3.
+
+{UMBRELA_FEW_SHOT_EXAMPLES}
 
 <query>
 {run.query}
 </query>
+<standard_answer>
+{expected_answer_block(expected_answer)}
+</standard_answer>
 <passage>
 {passage}
 </passage>
@@ -314,7 +373,12 @@ def mrr(binary: list[int]) -> float:
     return 0.0
 
 
-def compute_autonugget(client: OpenAICompatibleClient, run: RAGRun, umbrela_scores: dict[str, int]) -> dict[str, Any]:
+def compute_autonugget(
+    client: OpenAICompatibleClient,
+    run: RAGRun,
+    umbrela_scores: dict[str, int],
+    expected_answer: str | None = None,
+) -> dict[str, Any]:
     filtered = [
         passage
         for pid, passage in run.retrieved_passages.items()
@@ -324,11 +388,16 @@ def compute_autonugget(client: OpenAICompatibleClient, run: RAGRun, umbrela_scor
     nuggets: list[str] = []
     for _ in range(5):
         prompt = f"""
-Update the list of atomic nuggets of information so they best provide all information required for the query.
-Use only the provided context and the existing nugget list.
+Update the list of atomic nuggets of information so they best cover the query.
+A nugget is a short, standalone fact that a good answer should include.
+Use the expert standard answer as the target when available, and use the retrieved context to keep nuggets grounded in available evidence.
 Return JSON array only, with at most 30 short strings. If context lacks relevant information, return ["{NO_INFO_NUGGET}"].
 
+{NUGGET_FEW_SHOT_EXAMPLES}
+
 Search Query: {run.query}
+
+{expected_answer_block(expected_answer)}
 
 Context:
 {context}
@@ -344,10 +413,14 @@ Initial Nugget List: {json.dumps(nuggets, ensure_ascii=False)}
     for chunk in chunks(nuggets, 10):
         prompt = f"""
 Label each nugget as "vital" or "okay" for the search query.
+Use the expert standard answer as the target when available.
+Label a nugget "vital" if it is necessary for a high-quality answer to the query.
+Label a nugget "okay" if it is useful but supplementary.
 Return JSON array only, same order and same length.
 If the nugget is "{NO_INFO_NUGGET}", label it "vital".
 
 Search Query: {run.query}
+{expected_answer_block(expected_answer)}
 Nugget List: {json.dumps(chunk, ensure_ascii=False)}
 """
         labels.extend(normalize_values(parse_list(client.chat(prompt)), {"vital", "okay"}))
@@ -686,10 +759,11 @@ def evaluate(args: argparse.Namespace) -> None:
             "query_run": run.query_run,
             "generated_answer": generated_text(run.generated_answer_parts),
         }
+        expected = golden.get(run.query_id, {}).get("expected_answer")
 
         step_started_at = time.perf_counter()
         log("    → UMBRELA retrieval scoring...")
-        umbrella = compute_umbrela(client, run, k_values)
+        umbrella = compute_umbrela(client, run, k_values, expected_answer=expected)
         log_step_done(
             f"UMBRELA mean={umbrella['mean_umbrela_score']:.4f}",
             step_started_at,
@@ -697,7 +771,12 @@ def evaluate(args: argparse.Namespace) -> None:
 
         step_started_at = time.perf_counter()
         log("    → AutoNugget generation scoring...")
-        autonugget = compute_autonugget(client, run, umbrella["umbrela_scores"])
+        autonugget = compute_autonugget(
+            client,
+            run,
+            umbrella["umbrela_scores"],
+            expected_answer=expected,
+        )
         log_step_done(
             f"AutoNugget vital={autonugget['vital_nuggetizer_score']:.4f}, "
             f"assign_mean={autonugget['mean_nugget_assignment_score']:.4f}, "

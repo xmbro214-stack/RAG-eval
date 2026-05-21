@@ -41,6 +41,11 @@ UMBRELA 分数含义：
 也会惩罚把 1 分 passage 排在高位；相比 `mean_umbrela_score`，它更能反映排序
 引擎是否把最有用的资料放在靠前位置。
 
+当前轻量脚本的 UMBRELA judge prompt 已加入业务 few-shot 示例。如果某个 query
+在 golden answer CSV 中有专家标准答案，prompt 会把 `expected_answer` 一并提供给
+judge，要求 judge 判断 retrieved chunk 是否能支撑该标准答案。这样可以减少仅凭
+关键词相似导致的高分，更贴近“检索块是否真正支撑专家答案”的目标。
+
 ## Nugget 覆盖指标
 
 | 字段 | 含义 |
@@ -51,6 +56,10 @@ UMBRELA 分数含义：
 
 如果你关注“答案有没有答全”，`generation_score_vital_nuggetizer_score`
 通常比全量 nugget 平均分更重要，因为它更强调关键点覆盖。
+
+当前轻量脚本的 nugget 抽取 prompt 也加入了业务 few-shot 示例。如果存在专家
+`expected_answer`，nuggets 会以标准答案作为目标，并结合 retrieved context 保持
+可溯源。这样生成的 nuggets 更接近业务专家认为“应该答到”的关键事实。
 
 ## 来源支持与引用指标
 
