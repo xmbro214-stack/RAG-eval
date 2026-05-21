@@ -1,0 +1,43 @@
+queries_csv: data/qa_golden.csv
+golden_csv: data/qa_golden.csv
+
+output:
+  root: data/eval_runs
+  run_name: ragflow_grid
+  overwrite: false
+
+datasets:
+  - id: "123"
+    name: custom
+  - id: "345"
+    name: trd
+
+grid:
+  page_sizes: [10, 20, 30, 40]
+  similarity_thresholds: [0.1, 0.2]
+
+generation:
+  retrieval_url: "example"
+  retrieval_api_key_env: RETRIEVAL_API_KEY
+  top_k: 1024
+  rerank_id: "examplemodel@provider"
+  vector_similarity_weight: 0.3
+  repeat_query: 4
+  max_workers: 1
+  timeout: 120
+  retries: 2
+  llm_base_url: "example/http"
+  llm_api_key_env: OPENAI_API_KEY
+  llm_model: "examplemodel"
+  max_tokens: 1000000
+
+evaluation:
+  chat_base_url_env: LOCAL_LLM_BASE_URL
+  chat_api_key_env: LOCAL_LLM_API_KEY
+  chat_model_env: LOCAL_LLM_MODEL
+  embedding_base_url_env: LOCAL_EMBEDDING_BASE_URL
+  embedding_api_key_env: LOCAL_EMBEDDING_API_KEY
+  embedding_model_env: LOCAL_EMBEDDING_MODEL
+  k_values: "1,3,5"
+  timeout: 120
+  retries: 2
