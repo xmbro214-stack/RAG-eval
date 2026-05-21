@@ -5,6 +5,28 @@
 RAG 回答，评估过程调用 OpenAI API compatible 的本地 chat 模型和 embedding
 模型。
 
+## 快速解读建议
+
+如果只想先看核心指标，可以按下面的顺序理解：
+
+| 评估目标 | 优先看 | 辅助看 | 说明 |
+| --- | --- | --- | --- |
+| 检索排序质量 | `retrieval_score_ndcg_metrics` | `retrieval_score_mean_umbrela_score`、`precision@K`、`AP@K`、`MRR` | NDCG 会利用 UMBRELA 的 0-3 多级相关性，更适合判断高价值 passage 是否排在前面。 |
+| 答案关键点召回 | `generation_score_factual_correctness_recall` | `generation_score_vital_nuggetizer_score`、`generation_score_mean_nugget_assignment_score` | 如果有专家标准答案，factual recall 是最直接的答案召回指标。 |
+| 答案忠实度 | `generation_score_faithfulness_score` | `generation_score_hallucination_score`、`generation_score_citation_f1_score` | Faithfulness 不依赖严格引用标记，更适合本地企业级 RAG 评测。 |
+| 语义接近程度 | `generation_score_semantic_similarity` | factual precision/recall/F1 | Semantic similarity 使用 embedding cosine similarity，只表示整体语义接近，不等价于事实完全正确。 |
+
+本版本新增或重点更新了两个指标方向：
+
+| 指标方向 | 相关字段 | 变化 |
+| --- | --- | --- |
+| NDCG@K | `retrieval_score_ndcg_metrics` | 使用 UMBRELA 的 0-3 多级相关性计算排序质量，奖励把 3 分 passage 排在更靠前的位置。 |
+| Faithfulness | `generation_score_faithfulness_score`、`generation_score_faithfulness_claims`、`generation_score_faithfulness_verdicts`、`generation_score_unsupported_claims` | 将生成答案拆成 claims，再用本地 LLM judge 判断每个 claim 是否能被 retrieved context 支持。 |
+
+另外，UMBRELA 和 nugget 相关 judge prompt 已加入 few-shot 示例；如果 golden
+answer CSV 中提供了专家 `expected_answer`，脚本会把它放入 prompt，帮助 judge 更
+贴近“检索块是否支撑专家标准答案”和“答案是否覆盖业务关键点”的目标。
+
 ## 基础标识字段
 
 | 字段 | 含义 |
@@ -40,6 +62,16 @@ UMBRELA 分数含义：
 如果重点关注排序质量，建议优先看 `NDCG@K`。它会奖励把 3 分 passage 排在前面，
 也会惩罚把 1 分 passage 排在高位；相比 `mean_umbrela_score`，它更能反映排序
 引擎是否把最有用的资料放在靠前位置。
+
+NDCG@K 的计算方式：
+
+1. 对前 K 个 passage 使用 UMBRELA 分数作为相关性 `rel`。
+2. 计算 `DCG@K = sum((2^rel - 1) / log2(rank + 1))`，其中 `rank` 从 1 开始。
+3. 将同一组 passage 按相关性从高到低排序，得到理想排序的 `IDCG@K`。
+4. `NDCG@K = DCG@K / IDCG@K`。如果没有任何相关性增益，则记为 `0`。
+
+直观理解：同样都是检索到高分 passage，排在第 1 位比排在第 5 位更值钱；3 分
+passage 的收益也会明显高于 1 分 passage。
 
 当前轻量脚本的 UMBRELA judge prompt 已加入业务 few-shot 示例。如果某个 query
 在 golden answer CSV 中有专家标准答案，prompt 会把 `expected_answer` 一并提供给
@@ -80,6 +112,18 @@ judge，要求 judge 判断 retrieved chunk 是否能支撑该标准答案。这
 context 中找到依据，因此更适合引用粒度不稳定、答案会综合多段上下文的企业级 RAG
 评测场景。
 
+Faithfulness 的计算方式：
+
+1. 从 `generated_answer` 中抽取原子事实主张 claims。
+2. 把所有 retrieved passages 拼成完整 context。
+3. 对每个 claim 做 NLI 判定：`entailment` 表示 context 支持该主张，`neutral`
+   表示 context 不足以推出该主张，`contradiction` 表示 context 与该主张冲突。
+4. `generation_score_faithfulness_score = entailment claims 数 / generated claims 总数`。
+
+因此，`generation_score_unsupported_claims` 是排查幻觉和无依据扩写时最有用的
+明细列。如果该列中出现关键业务结论，说明答案虽然可能看起来合理，但没有被本次检索
+上下文支撑。
+
 `generation_score_citation_f1_score` 需要谨慎解读。它对引用粒度非常敏感：
 如果一个答案句子综合了多个 passage 的信息，或者引用是段落级而不是句子级，
 该指标可能会被压得很低。
@@ -100,11 +144,22 @@ context 中找到依据，因此更适合引用粒度不稳定、答案会综合
 | `generation_score_precision_verdicts` | 生成答案 claims 对照期望答案的判定结果，JSON 列表。 |
 | `generation_score_recall_verdicts` | 期望答案 claims 对照生成答案的判定结果，JSON 列表。 |
 
+Factual correctness 的计算口径：
+
+| 子指标 | 计算方式 | 主要含义 |
+| --- | --- | --- |
+| precision | 生成答案 claims 中，被 expected answer 支持的比例。 | 生成答案有没有加入标准答案外的额外事实。 |
+| recall | expected answer claims 中，被生成答案覆盖的比例。 | 生成答案有没有答全专家标准答案中的关键事实。 |
+| F1 | precision 和 recall 的调和平均。 | 同时考虑多答和漏答。 |
+
 如果你重点关注召回，建议优先看：
 
 1. `generation_score_factual_correctness_recall`
 2. `generation_score_vital_nuggetizer_score`
 3. `generation_score_mean_nugget_assignment_score`
+
+其中 `generation_score_factual_correctness_recall` 依赖专家 `expected_answer`；
+如果某些 query 没有 expected answer，就优先看 nugget 相关指标。
 
 ## Token 用量字段
 
@@ -129,3 +184,12 @@ usage，这些值可能是 `0`，或者低于真实消耗。
 | `p25` | 25 分位数。表示有 25% 的样本分数小于或等于该值。 |
 | `p75` | 75 分位数。表示有 75% 的样本分数小于或等于该值。 |
 | `max` | 最高分。适合看系统上限。 |
+
+## 兼容性说明
+
+旧版本脚本生成的 `local_eval_results.csv` 可能没有 NDCG 或 Faithfulness 相关列。
+如果你需要分析这些新指标，需要用当前版本的 `scripts/openai_compatible_eval.py`
+重新跑一次评估。
+
+`retrieval_score_precision_metrics` 这个字段名保留了历史命名，但其中现在也包含
+`NDCG@`。如果只想读取 NDCG，建议直接使用 `retrieval_score_ndcg_metrics`。
