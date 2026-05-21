@@ -265,6 +265,11 @@ Return only one integer: 0, 1, 2, or 3.
         rel_at_k = sum(binary[:k])
         retrieval_scores["precision@"][str(k)] = rel_at_k / k
         retrieval_scores["AP@"][str(k)] = average_precision(binary[:k], rel_at_k)
+    retrieval_scores["NDCG@"] = {
+        str(k): ndcg_at_k(list(scores.values()), k)
+        for k in k_values
+        if k <= len(scores)
+    }
     retrieval_scores["MRR"] = mrr(binary)
     return {
         "umbrela_scores": scores,
@@ -283,6 +288,23 @@ def average_precision(binary: list[int], total_relevant: int) -> float:
             relevant_so_far += 1
             precisions.append(relevant_so_far / idx)
     return sum(precisions) / len(precisions) if precisions else 0.0
+
+
+def dcg_at_k(relevance_scores: list[int], k: int) -> float:
+    return sum(
+        ((2 ** score) - 1) / math.log2(index + 2)
+        for index, score in enumerate(relevance_scores[:k])
+    )
+
+
+def ndcg_at_k(relevance_scores: list[int], k: int) -> float:
+    if not relevance_scores or k <= 0:
+        return 0.0
+    actual_dcg = dcg_at_k(relevance_scores, k)
+    ideal_dcg = dcg_at_k(sorted(relevance_scores, reverse=True), k)
+    if ideal_dcg == 0:
+        return 0.0
+    return actual_dcg / ideal_dcg
 
 
 def mrr(binary: list[int]) -> float:
@@ -479,11 +501,47 @@ Generated answer:
     return max(0.0, min(1.0, score))
 
 
-def compute_golden(client: OpenAICompatibleClient, run: RAGRun, expected_answer: str) -> dict[str, Any]:
+def compute_faithfulness(client: OpenAICompatibleClient, run: RAGRun) -> dict[str, Any]:
+    answer = generated_text(run.generated_answer_parts)
+    context = "\n\n".join(
+        f"{passage_id}: {passage}"
+        for passage_id, passage in run.retrieved_passages.items()
+    )
+    claims = extract_claims(client, answer)
+    if not claims:
+        return {
+            "faithfulness_score": 0.0,
+            "faithfulness_claims": [],
+            "faithfulness_verdicts": [],
+            "unsupported_claims": [],
+        }
+
+    verdicts = verify_claims(client, claims, context)
+    score = entailment_ratio(verdicts)
+    unsupported_claims = [
+        item["claim"]
+        for item in verdicts
+        if item.get("verdict") != "entailment"
+    ]
+    return {
+        "faithfulness_score": score,
+        "faithfulness_claims": claims,
+        "faithfulness_verdicts": verdicts,
+        "unsupported_claims": unsupported_claims,
+    }
+
+
+def compute_golden(
+    client: OpenAICompatibleClient,
+    run: RAGRun,
+    expected_answer: str,
+    generated_claims: list[str] | None = None,
+) -> dict[str, Any]:
     answer = generated_text(run.generated_answer_parts)
     emb = client.embeddings([answer, expected_answer])
     semantic = cosine_similarity(emb[0], emb[1])
-    generated_claims = extract_claims(client, answer)
+    if generated_claims is None:
+        generated_claims = extract_claims(client, answer)
     expected_claims = extract_claims(client, expected_answer)
     if not generated_claims or not expected_claims:
         precision = recall = f1 = 0.0
@@ -653,6 +711,16 @@ def evaluate(args: argparse.Namespace) -> None:
         log_step_done(f"Citation f1={citation['f1']:.4f}", step_started_at)
 
         step_started_at = time.perf_counter()
+        log("    → Faithfulness NLI scoring against retrieved context...")
+        faithfulness = compute_faithfulness(client, run)
+        log_step_done(
+            f"Faithfulness={faithfulness['faithfulness_score']:.4f}, "
+            f"claims={len(faithfulness['faithfulness_claims'])}, "
+            f"unsupported={len(faithfulness['unsupported_claims'])}",
+            step_started_at,
+        )
+
+        step_started_at = time.perf_counter()
         log("    → No-answer detection...")
         no_answer = compute_no_answer(client, run)
         log_step_done(f"No-answer query_answered={no_answer['query_answered']}", step_started_at)
@@ -665,6 +733,7 @@ def evaluate(args: argparse.Namespace) -> None:
         row.update({
             "retrieval_score_umbrela_scores": json_cell(umbrella["umbrela_scores"]),
             "retrieval_score_precision_metrics": json_cell(umbrella["retrieval_scores"]),
+            "retrieval_score_ndcg_metrics": json_cell(umbrella["retrieval_scores"].get("NDCG@", {})),
             "retrieval_score_mean_umbrela_score": umbrella["mean_umbrela_score"],
             "generation_score_autonugget_scores": json_cell({
                 "nuggetizer_scores": autonugget["nuggetizer_scores"],
@@ -676,6 +745,10 @@ def evaluate(args: argparse.Namespace) -> None:
             "generation_score_mean_nugget_assignment_score": autonugget["mean_nugget_assignment_score"],
             "generation_score_vital_nuggetizer_score": autonugget["vital_nuggetizer_score"],
             "generation_score_hallucination_score": hallucination,
+            "generation_score_faithfulness_score": faithfulness["faithfulness_score"],
+            "generation_score_faithfulness_claims": json_cell(faithfulness["faithfulness_claims"]),
+            "generation_score_faithfulness_verdicts": json_cell(faithfulness["faithfulness_verdicts"]),
+            "generation_score_unsupported_claims": json_cell(faithfulness["unsupported_claims"]),
             "generation_score_citation_scores": json_cell(citation),
             "generation_score_citation_f1_score": citation["f1"],
             "generation_score_no_answer_score": json_cell(no_answer),
@@ -685,7 +758,12 @@ def evaluate(args: argparse.Namespace) -> None:
             step_started_at = time.perf_counter()
             log("    → Golden-answer semantic/factual scoring...")
             expected = golden[run.query_id]["expected_answer"]
-            golden_scores = compute_golden(client, run, expected)
+            golden_scores = compute_golden(
+                client,
+                run,
+                expected,
+                generated_claims=faithfulness["faithfulness_claims"],
+            )
             log_step_done(
                 f"Golden semantic={golden_scores['semantic_similarity']:.4f}, "
                 f"factual_f1={golden_scores['factual_correctness_f1']:.4f}, "

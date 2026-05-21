@@ -19,7 +19,8 @@ RAG 回答，评估过程调用 OpenAI API compatible 的本地 chat 模型和 e
 | 字段 | 含义 |
 | --- | --- |
 | `retrieval_score_umbrela_scores` | JSON 字典，key 是 `passage_id`，value 是 UMBRELA 风格的相关性分数，范围 0 到 3。 |
-| `retrieval_score_precision_metrics` | JSON 对象，包含基于 UMBRELA 分数计算出的 `precision@K`、`AP@K` 和 `MRR`。UMBRELA 分数 >= 2 的 passage 会被视为相关。 |
+| `retrieval_score_precision_metrics` | JSON 对象，包含基于 UMBRELA 分数计算出的 `precision@K`、`AP@K`、`NDCG@K` 和 `MRR`。其中 `precision@K`、`AP@K`、`MRR` 会把 UMBRELA 分数 >= 2 的 passage 视为相关。 |
+| `retrieval_score_ndcg_metrics` | JSON 对象，只包含 `NDCG@K`。NDCG 会直接使用 UMBRELA 的 0-3 多级相关性分数，因此比二元 precision/MRR 更适合衡量排序质量。 |
 | `retrieval_score_mean_umbrela_score` | 所有 retrieved passages 的 UMBRELA 平均分。越高表示检索出来的上下文整体越相关。 |
 
 UMBRELA 分数含义：
@@ -34,7 +35,11 @@ UMBRELA 分数含义：
 注意：当前脚本没有计算严格意义上的检索召回率 `Recall@K`。真正的检索召回率
 需要你为每个 query 标注“所有应该被检索到的相关/golden passages”。当前结果
 中更适合作为检索质量参考的是 `retrieval_score_mean_umbrela_score`、
-`precision@K`、`AP@K` 和 `MRR`。
+`NDCG@K`、`precision@K`、`AP@K` 和 `MRR`。
+
+如果重点关注排序质量，建议优先看 `NDCG@K`。它会奖励把 3 分 passage 排在前面，
+也会惩罚把 1 分 passage 排在高位；相比 `mean_umbrela_score`，它更能反映排序
+引擎是否把最有用的资料放在靠前位置。
 
 ## Nugget 覆盖指标
 
@@ -52,9 +57,19 @@ UMBRELA 分数含义：
 | 字段 | 含义 |
 | --- | --- |
 | `generation_score_hallucination_score` | LLM judge 给出的来源支持分，范围 0 到 1。越高表示生成答案越被检索来源支持。注意：这不是原项目默认的 HHEM 分数，而是轻量脚本里的本地 LLM judge 版本。 |
+| `generation_score_faithfulness_score` | 基于 NLI 的忠实度分数。脚本先把生成答案拆成多个 claims，再判断每个 claim 是否能被完整 retrieved context 支持。分数 = 被 context entail 的 claims 数 / 总 claims 数。 |
+| `generation_score_faithfulness_claims` | 从生成答案中抽取出来、用于忠实度判断的 claims，JSON 列表。 |
+| `generation_score_faithfulness_verdicts` | 每个 generated claim 对照 retrieved context 的 NLI 判定结果，JSON 列表。判定值包括 `entailment`、`contradiction`、`neutral`。 |
+| `generation_score_unsupported_claims` | 没有被 retrieved context 支持的 claims，包含 `neutral` 和 `contradiction`。 |
 | `generation_score_citation_scores` | JSON 对象，包含 citation 级别和答案片段级别的支持分。 |
 | `generation_score_citation_f1_score` | 综合 citation weighted precision 和 answer-part weighted recall 的 F1 分数。越高表示引用越能支撑对应答案片段。 |
 | `generation_score_no_answer_score` | JSON 对象，表示答案是否尝试回答问题，例如 `{"query_answered": "yes"}`。 |
+
+相比 `generation_score_citation_f1_score`，更推荐优先使用
+`generation_score_faithfulness_score` 判断答案是否忠实于检索上下文。Faithfulness
+不依赖严格的 `[1][2]` 引用标记，只判断生成答案的事实主张是否能在 retrieved
+context 中找到依据，因此更适合引用粒度不稳定、答案会综合多段上下文的企业级 RAG
+评测场景。
 
 `generation_score_citation_f1_score` 需要谨慎解读。它对引用粒度非常敏感：
 如果一个答案句子综合了多个 passage 的信息，或者引用是段落级而不是句子级，
@@ -105,4 +120,3 @@ usage，这些值可能是 `0`，或者低于真实消耗。
 | `p25` | 25 分位数。表示有 25% 的样本分数小于或等于该值。 |
 | `p75` | 75 分位数。表示有 75% 的样本分数小于或等于该值。 |
 | `max` | 最高分。适合看系统上限。 |
-

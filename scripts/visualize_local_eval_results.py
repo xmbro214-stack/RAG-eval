@@ -20,6 +20,7 @@ METRICS = [
     ("generation_score_factual_correctness_precision", "Factual precision", "quality"),
     ("generation_score_factual_correctness_f1", "Factual F1", "quality"),
     ("generation_score_semantic_similarity", "Semantic similarity", "quality"),
+    ("generation_score_faithfulness_score", "Faithfulness", "support"),
     ("generation_score_citation_f1_score", "Citation F1", "citation"),
     ("generation_score_hallucination_score", "Source support", "support"),
 ]
@@ -27,7 +28,11 @@ METRICS = [
 DETAIL_COLUMNS = [
     ("retrieval_score_umbrela_scores", "UMBRELA passage scores"),
     ("retrieval_score_precision_metrics", "Retrieval precision/AP/MRR"),
+    ("retrieval_score_ndcg_metrics", "Retrieval NDCG@K"),
     ("generation_score_autonugget_scores", "Nuggets and assignments"),
+    ("generation_score_faithfulness_claims", "Faithfulness claims"),
+    ("generation_score_faithfulness_verdicts", "Faithfulness verdicts"),
+    ("generation_score_unsupported_claims", "Unsupported claims"),
     ("generation_score_citation_scores", "Citation scores"),
     ("generation_score_no_answer_score", "No-answer score"),
     ("generation_score_generated_claims", "Generated claims"),
@@ -162,7 +167,7 @@ def render_summary_cards(summary: dict[str, float | None], total_rows: int, tota
         ("Recall avg", fmt(summary["recall_average"]), "Mean of factual/vital/assignment recall"),
         ("Factual recall", fmt(summary["generation_score_factual_correctness_recall"]), "Golden claim coverage"),
         ("Vital nuggets", fmt(summary["generation_score_vital_nuggetizer_score"]), "Key nugget coverage"),
-        ("Citation F1", fmt(summary["generation_score_citation_f1_score"]), "Citation support quality"),
+        ("Faithfulness", fmt(summary["generation_score_faithfulness_score"]), "Claims supported by retrieved context"),
     ]
     return "\n".join(
         f"""
