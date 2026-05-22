@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import re
 import subprocess
@@ -29,6 +30,14 @@ ROOT = Path(__file__).resolve().parents[1]
 GENERATION_SCRIPT = ROOT / "scripts" / "generate_answers_http_rag.py"
 EVALUATION_SCRIPT = ROOT / "scripts" / "openai_compatible_eval.py"
 VALID_STAGES = ("all", "generate", "eval")
+LOGGER = logging.getLogger("rag_eval.pipeline")
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s - %(message)s"
+SECRET_FLAGS = {
+    "--llm-api-key",
+    "--retrieval-api-key",
+    "--chat-api-key",
+    "--embedding-api-key",
+}
 
 
 @dataclass(frozen=True)
@@ -166,6 +175,7 @@ def add_optional_arg(command: list[str], flag: str, value: Any) -> None:
 
 def build_generation_command(config: dict[str, Any], task: PipelineTask) -> list[str]:
     generation = config.get("generation") or {}
+    log_level = config_value(generation, "log_level", default=config_value(config.get("logging") or {}, "level"))
     command = [
         sys.executable,
         str(GENERATION_SCRIPT),
@@ -216,6 +226,7 @@ def build_generation_command(config: dict[str, Any], task: PipelineTask) -> list
         "--max-workers": generation.get("max_workers"),
         "--timeout": generation.get("timeout"),
         "--retries": generation.get("retries"),
+        "--log-level": log_level,
     }
     for flag, value in optional_flags.items():
         add_optional_arg(command, flag, value)
@@ -224,6 +235,7 @@ def build_generation_command(config: dict[str, Any], task: PipelineTask) -> list
 
 def build_evaluation_command(config: dict[str, Any], task: PipelineTask) -> list[str]:
     evaluation = config.get("evaluation") or {}
+    log_level = config_value(evaluation, "log_level", default=config_value(config.get("logging") or {}, "level"))
     command = [
         sys.executable,
         str(EVALUATION_SCRIPT),
@@ -248,6 +260,7 @@ def build_evaluation_command(config: dict[str, Any], task: PipelineTask) -> list
         "--k-values": evaluation.get("k_values"),
         "--timeout": evaluation.get("timeout"),
         "--retries": evaluation.get("retries"),
+        "--log-level": log_level,
     }
     for flag, value in optional_flags.items():
         add_optional_arg(command, flag, value)
@@ -280,13 +293,40 @@ def write_manifest(path: Path, entries: Iterable[dict[str, Any]]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def configure_logging(level: str) -> None:
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format=LOG_FORMAT,
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
+    )
+
+
 def log(message: str) -> None:
-    print(message, file=sys.stderr, flush=True)
+    LOGGER.info(message)
+
+
+def redacted_command(command: list[str]) -> str:
+    redacted: list[str] = []
+    redact_next = False
+    for part in command:
+        if redact_next:
+            redacted.append("<redacted>")
+            redact_next = False
+            continue
+        redacted.append(part)
+        if part in SECRET_FLAGS:
+            redact_next = True
+    return " ".join(redacted)
 
 
 def run_command(command: list[str], dry_run: bool) -> float:
     started_at = time.perf_counter()
-    log("$ " + " ".join(command))
+    command_text = "$ " + redacted_command(command)
+    if dry_run:
+        log(command_text)
+    else:
+        LOGGER.debug(command_text)
     if not dry_run:
         subprocess.run(command, cwd=ROOT, check=True)
     return time.perf_counter() - started_at
@@ -345,7 +385,7 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
                 except subprocess.CalledProcessError as exc:
                     entry["generation_status"] = "failed"
                     entry["generation_error"] = str(exc)
-                    log(f"[{index}/{len(tasks)}] Generate failed: {exc}")
+                    LOGGER.error(f"[{index}/{len(tasks)}] Generate failed: {exc}")
                     entries.append(entry)
                     write_manifest(manifest_path, entries)
                     raise
@@ -371,7 +411,7 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
                 except subprocess.CalledProcessError as exc:
                     entry["evaluation_status"] = "failed"
                     entry["evaluation_error"] = str(exc)
-                    log(f"[{index}/{len(tasks)}] Eval failed: {exc}")
+                    LOGGER.error(f"[{index}/{len(tasks)}] Eval failed: {exc}")
                     entries.append(entry)
                     write_manifest(manifest_path, entries)
                     raise
@@ -389,19 +429,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage", choices=VALID_STAGES, default="all", help="Pipeline stage to run.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without running them.")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing generated/eval outputs.")
+    parser.add_argument("--log-level", default=os.getenv("RAG_EVAL_LOG_LEVEL"), help="Logging level: DEBUG, INFO, WARNING, ERROR.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
+    configured_level = args.log_level or str((config.get("logging") or {}).get("level") or "INFO")
+    configure_logging(configured_level)
     entries = run_pipeline(
         config,
         stage=args.stage,
         dry_run=args.dry_run,
         overwrite=args.overwrite,
     )
-    print(f"Pipeline tasks processed: {len(entries)}")
+    LOGGER.info(f"Pipeline tasks processed: {len(entries)}")
 
 
 if __name__ == "__main__":

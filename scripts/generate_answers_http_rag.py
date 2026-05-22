@@ -34,8 +34,8 @@ import argparse
 import csv
 import hashlib
 import json
+import logging
 import os
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -52,6 +52,9 @@ FIELDNAMES = [
     "passage",
     "generated_answer",
 ]
+
+LOGGER = logging.getLogger("rag_eval.generate")
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s - %(message)s"
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a careful RAG assistant. Answer the user question using only the "
@@ -98,7 +101,7 @@ class HTTPJSONClient:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
-            log(
+            LOGGER.debug(
                 f"HTTP POST attempt {attempt + 1}/{self.retries + 1}: "
                 f"url={url}, payload={payload_summary(payload)}, body_bytes={len(body)}"
             )
@@ -106,11 +109,14 @@ class HTTPJSONClient:
             try:
                 with request.urlopen(req, timeout=self.timeout) as resp:
                     text = resp.read().decode("utf-8")
-                    log(f"HTTP POST success: url={url}, status={resp.status}, response_bytes={len(text.encode('utf-8'))}")
+                    LOGGER.debug(
+                        f"HTTP POST success: url={url}, status={resp.status}, "
+                        f"response_bytes={len(text.encode('utf-8'))}"
+                    )
                     return json.loads(text) if text else {}
             except (error.HTTPError, error.URLError, TimeoutError) as exc:
                 last_error = describe_http_error(exc)
-                log(f"HTTP POST failed: url={url}, error={last_error}")
+                LOGGER.error(f"HTTP POST failed: url={url}, error={last_error}")
                 if attempt < self.retries:
                     time.sleep(1.5 * (attempt + 1))
         raise RuntimeError(f"Request failed for {url}: {last_error}")
@@ -146,7 +152,7 @@ class OpenAICompatibleChatClient:
         if self.max_tokens is not None:
             payload["max_tokens"] = self.max_tokens
 
-        log(
+        LOGGER.debug(
             "Chat completion request: "
             f"url={self.chat_url}, model={self.model}, temperature={self.temperature}, "
             f"max_tokens={self.max_tokens}, system_chars={len(system_prompt)}, "
@@ -219,8 +225,17 @@ def short_repr(value: Any, limit: int = 240) -> str:
     return text
 
 
+def configure_logging(level: str) -> None:
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format=LOG_FORMAT,
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
+    )
+
+
 def log(message: str) -> None:
-    print(message, file=sys.stderr, flush=True)
+    LOGGER.info(message)
 
 
 def read_queries(path: str) -> list[Query]:
@@ -691,11 +706,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-workers", type=int, default=1, help="Parallel workers. Use 1 for sequential runs.")
     parser.add_argument("--timeout", type=int, default=120, help="HTTP timeout in seconds.")
     parser.add_argument("--retries", type=int, default=2, help="Retries per HTTP request.")
+    parser.add_argument("--log-level", default=os.getenv("RAG_EVAL_LOG_LEVEL", "INFO"), help="Logging level: DEBUG, INFO, WARNING, ERROR.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    configure_logging(args.log_level)
     if args.repeat_query < 1:
         raise ValueError("--repeat-query must be >= 1")
     if args.top_k < 1:

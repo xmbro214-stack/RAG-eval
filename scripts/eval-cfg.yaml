@@ -6,6 +6,10 @@ output:
   run_name: ragflow_grid
   overwrite: false
 
+logging:
+  # INFO keeps task progress and request metadata; DEBUG adds HTTP payload summaries.
+  level: INFO
+
 datasets:
   - id: "123"
     name: custom

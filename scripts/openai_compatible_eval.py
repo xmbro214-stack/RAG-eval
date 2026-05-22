@@ -23,10 +23,10 @@ import ast
 import csv
 import hashlib
 import json
+import logging
 import math
 import os
 import re
-import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -35,6 +35,8 @@ from urllib import error, request
 
 
 NO_INFO_NUGGET = "Not enough information, no answer found"
+LOGGER = logging.getLogger("rag_eval.evaluate")
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s - %(message)s"
 
 UMBRELA_FEW_SHOT_EXAMPLES = """
 Few-shot scoring examples from PCB defect knowledge-base evaluation:
@@ -128,7 +130,7 @@ class OpenAICompatibleClient:
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
 
-        log(
+        LOGGER.debug(
             "Chat judge request: "
             f"url={self.chat_url}, model={self.chat_model}, max_tokens={max_tokens}, "
             f"prompt_chars={len(prompt)}, prompt_sha256={sha256_short(prompt)}"
@@ -143,7 +145,7 @@ class OpenAICompatibleClient:
         if not self.embedding_url or not self.embedding_model:
             raise ValueError("Embedding endpoint/model is required for semantic similarity.")
         payload = {"model": self.embedding_model, "input": texts}
-        log(
+        LOGGER.debug(
             "Embedding request: "
             f"url={self.embedding_url}, model={self.embedding_model}, "
             f"input_count={len(texts)}, input_chars={[len(text) for text in texts]}"
@@ -159,7 +161,7 @@ class OpenAICompatibleClient:
         }
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
-            log(
+            LOGGER.debug(
                 f"HTTP POST attempt {attempt + 1}/{self.retries + 1}: "
                 f"url={url}, payload={payload_summary(payload)}, body_bytes={len(body)}"
             )
@@ -167,11 +169,14 @@ class OpenAICompatibleClient:
             try:
                 with request.urlopen(req, timeout=self.timeout) as resp:
                     text = resp.read().decode("utf-8")
-                    log(f"HTTP POST success: url={url}, status={resp.status}, response_bytes={len(text.encode('utf-8'))}")
+                    LOGGER.debug(
+                        f"HTTP POST success: url={url}, status={resp.status}, "
+                        f"response_bytes={len(text.encode('utf-8'))}"
+                    )
                     return json.loads(text)
             except (error.HTTPError, error.URLError, TimeoutError) as exc:
                 last_error = describe_http_error(exc)
-                log(f"HTTP POST failed: url={url}, error={last_error}")
+                LOGGER.error(f"HTTP POST failed: url={url}, error={last_error}")
                 if attempt < self.retries:
                     time.sleep(1.5 * (attempt + 1))
         raise RuntimeError(f"Request failed for {url}: {last_error}")
@@ -778,8 +783,17 @@ def json_cell(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+def configure_logging(level: str) -> None:
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format=LOG_FORMAT,
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
+    )
+
+
 def log(message: str) -> None:
-    print(message, file=sys.stderr, flush=True)
+    LOGGER.info(message)
 
 
 def log_step_done(name: str, started_at: float) -> None:
@@ -992,6 +1006,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--k-values", default="1,3,5")
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--retries", type=int, default=2)
+    parser.add_argument("--log-level", default=os.getenv("RAG_EVAL_LOG_LEVEL", "INFO"), help="Logging level: DEBUG, INFO, WARNING, ERROR.")
     args = parser.parse_args()
 
     required = {
@@ -1007,4 +1022,6 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    evaluate(parse_args())
+    parsed_args = parse_args()
+    configure_logging(parsed_args.log_level)
+    evaluate(parsed_args)
