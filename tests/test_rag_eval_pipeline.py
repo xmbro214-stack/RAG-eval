@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts import run_rag_eval_pipeline as pipeline
+from rag_eval_pipeline import pipeline
 
 
 def sample_config(root: str) -> dict:

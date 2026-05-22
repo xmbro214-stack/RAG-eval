@@ -1,11 +1,13 @@
-"""Prepare local QA data for Open RAG Eval.
+"""Prepare a local QA workbook for the lightweight RAG eval pipeline.
 
-This converts data/QA List.xlsx to the CSV shape expected by run_eval and skips
-the first data row, which is a sample QA record.
+This converts an Excel workbook to the CSV shape expected by the generation and
+evaluation scripts. The default input path is intentionally a local-only data
+file so the repository can keep only a small sample CSV under version control.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -96,10 +98,28 @@ def _read_first_sheet_rows(path: Path) -> list[list[str]]:
     return rows
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--input-xlsx",
+        type=Path,
+        default=XLSX_PATH,
+        help=f"Source workbook. Default: {XLSX_PATH}",
+    )
+    parser.add_argument(
+        "--output-csv",
+        type=Path,
+        default=OUTPUT_PATH,
+        help=f"Output CSV. Default: {OUTPUT_PATH}",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
-    rows = _read_first_sheet_rows(XLSX_PATH)
+    args = parse_args()
+    rows = _read_first_sheet_rows(args.input_xlsx)
     if len(rows) < 3:
-        raise ValueError(f"No real QA rows found in {XLSX_PATH}")
+        raise ValueError(f"No real QA rows found in {args.input_xlsx}")
 
     output_rows = []
     # rows[0] is the header, rows[1] is a sample row supplied for reference.
@@ -131,7 +151,8 @@ def main() -> None:
                     "expected_answer": answer,
                 })
 
-    with OUTPUT_PATH.open("w", newline="", encoding="utf-8") as output_file:
+    args.output_csv.parent.mkdir(parents=True, exist_ok=True)
+    with args.output_csv.open("w", newline="", encoding="utf-8") as output_file:
         writer = csv.DictWriter(
             output_file,
             fieldnames=["query_id", "query", "expected_answer"],
@@ -139,7 +160,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(output_rows)
 
-    print(f"Wrote {len(output_rows)} rows to {OUTPUT_PATH}")
+    print(f"Wrote {len(output_rows)} rows to {args.output_csv}")
 
 
 if __name__ == "__main__":

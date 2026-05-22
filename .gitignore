@@ -171,4 +171,11 @@ tests/outputs
 data/local_eval_results.csv
 data/local_eval_results_no_answer.csv
 data/recall_metrics_summary.csv
+data/eval_runs/
+data/custom/
+data/trd/
+data/*.tmp.csv
+data/*_eval_results.csv
+data/*generated_answers*.csv
 reports/
+scripts/eval-cfg.txt

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=70.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-eval-pipeline"
+version = "0.1.0"
+description = "Lightweight RAGFlow/OpenAI-compatible answer generation and evaluation pipeline."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "omegaconf~=2.3.0",
+  "python-dotenv~=1.0.1",
+]
+
+[project.scripts]
+rag-eval-pipeline = "rag_eval_pipeline.pipeline:main"
+rag-eval-generate = "rag_eval_pipeline.generation:main"
+rag-eval-evaluate = "rag_eval_pipeline.evaluation:main"
+rag-eval-visualize = "rag_eval_pipeline.visualization:main"
+
+[tool.setuptools.packages.find]
+include = ["rag_eval_pipeline*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
