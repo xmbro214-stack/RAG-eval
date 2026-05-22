@@ -27,6 +27,7 @@ import os
 import re
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 from urllib import error, request
@@ -753,18 +754,8 @@ def log_step_done(name: str, started_at: float) -> None:
     log(f"    ✓ {name} done in {time.perf_counter() - started_at:.2f}s")
 
 
-def evaluate(args: argparse.Namespace) -> None:
-    total_started_at = time.perf_counter()
-    log("Starting local OpenAI-compatible RAG evaluation")
-    log(f"  answers_csv={args.answers_csv}")
-    log(f"  golden_csv={args.golden_csv or '<disabled>'}")
-    log(f"  output_csv={args.output_csv}")
-    log(f"  chat_base_url={args.chat_base_url}")
-    log(f"  chat_model={args.chat_model}")
-    log(f"  embedding_base_url={args.embedding_base_url}")
-    log(f"  embedding_model={args.embedding_model}")
-
-    client = OpenAICompatibleClient(
+def build_client(args: argparse.Namespace) -> OpenAICompatibleClient:
+    return OpenAICompatibleClient(
         chat_base_url=args.chat_base_url,
         chat_api_key=args.chat_api_key,
         chat_model=args.chat_model,
@@ -775,6 +766,167 @@ def evaluate(args: argparse.Namespace) -> None:
         retries=args.retries,
     )
 
+
+def evaluate_run(
+    args: argparse.Namespace,
+    run: RAGRun,
+    golden: dict[str, dict[str, str]],
+    k_values: list[int],
+    idx: int,
+    total: int,
+) -> dict[str, Any]:
+    client = build_client(args)
+    run_started_at = time.perf_counter()
+    prefix = f"[{idx}/{total}]"
+
+    def run_log(message: str) -> None:
+        log(f"{prefix} {message}" if message else "")
+
+    def run_log_step_done(name: str, started_at: float) -> None:
+        run_log(f"    ✓ {name} done in {time.perf_counter() - started_at:.2f}s")
+
+    log("")
+    run_log(f"{run.query_id} run {run.query_run}: {run.query}")
+    run_log(
+        f"    passages={len(run.retrieved_passages)}, "
+        f"answer_parts={len(run.generated_answer_parts)}, "
+        f"answer_chars={len(run.generated_answer_raw)}"
+    )
+
+    row: dict[str, Any] = {
+        "query_id": run.query_id,
+        "query": run.query,
+        "query_run": run.query_run,
+        "generated_answer": generated_text(run.generated_answer_parts),
+    }
+    expected = golden.get(run.query_id, {}).get("expected_answer")
+
+    step_started_at = time.perf_counter()
+    run_log("    → UMBRELA retrieval scoring...")
+    umbrella = compute_umbrela(client, run, k_values, expected_answer=expected)
+    run_log_step_done(
+        f"UMBRELA mean={umbrella['mean_umbrela_score']:.4f}",
+        step_started_at,
+    )
+
+    step_started_at = time.perf_counter()
+    run_log("    → AutoNugget generation scoring...")
+    autonugget = compute_autonugget(
+        client,
+        run,
+        umbrella["umbrela_scores"],
+        expected_answer=expected,
+    )
+    run_log_step_done(
+        f"AutoNugget vital={autonugget['vital_nuggetizer_score']:.4f}, "
+        f"assign_mean={autonugget['mean_nugget_assignment_score']:.4f}, "
+        f"nuggets={len(autonugget['nuggets'])}",
+        step_started_at,
+    )
+
+    step_started_at = time.perf_counter()
+    run_log("    → Citation support scoring...")
+    citation = compute_citation(client, run)
+    run_log_step_done(f"Citation f1={citation['f1']:.4f}", step_started_at)
+
+    step_started_at = time.perf_counter()
+    run_log("    → Faithfulness NLI scoring against retrieved context...")
+    faithfulness = compute_faithfulness(client, run)
+    run_log_step_done(
+        f"Faithfulness={faithfulness['faithfulness_score']:.4f}, "
+        f"claims={len(faithfulness['faithfulness_claims'])}, "
+        f"unsupported={len(faithfulness['unsupported_claims'])}",
+        step_started_at,
+    )
+
+    step_started_at = time.perf_counter()
+    run_log("    → No-answer detection...")
+    no_answer = compute_no_answer(client, run)
+    run_log_step_done(f"No-answer query_answered={no_answer['query_answered']}", step_started_at)
+
+    step_started_at = time.perf_counter()
+    run_log("    → Hallucination/source-support scoring...")
+    hallucination = compute_hallucination_llm(client, run)
+    run_log_step_done(f"Hallucination/source-support={hallucination:.4f}", step_started_at)
+
+    row.update({
+        "retrieval_score_umbrela_scores": json_cell(umbrella["umbrela_scores"]),
+        "retrieval_score_precision_metrics": json_cell(umbrella["retrieval_scores"]),
+        "retrieval_score_ndcg_metrics": json_cell(umbrella["retrieval_scores"].get("NDCG@", {})),
+        "retrieval_score_mean_umbrela_score": umbrella["mean_umbrela_score"],
+        "generation_score_autonugget_scores": json_cell({
+            "nuggetizer_scores": autonugget["nuggetizer_scores"],
+            "nuggets": autonugget["nuggets"],
+            "labels": autonugget["labels"],
+            "assignments": autonugget["assignments"],
+            "assignment_scores": autonugget["assignment_scores"],
+        }),
+        "generation_score_mean_nugget_assignment_score": autonugget["mean_nugget_assignment_score"],
+        "generation_score_vital_nuggetizer_score": autonugget["vital_nuggetizer_score"],
+        "generation_score_hallucination_score": hallucination,
+        "generation_score_faithfulness_score": faithfulness["faithfulness_score"],
+        "generation_score_faithfulness_claims": json_cell(faithfulness["faithfulness_claims"]),
+        "generation_score_faithfulness_verdicts": json_cell(faithfulness["faithfulness_verdicts"]),
+        "generation_score_unsupported_claims": json_cell(faithfulness["unsupported_claims"]),
+        "generation_score_citation_scores": json_cell(citation),
+        "generation_score_citation_f1_score": citation["f1"],
+        "generation_score_no_answer_score": json_cell(no_answer),
+    })
+
+    if run.query_id in golden:
+        step_started_at = time.perf_counter()
+        run_log("    → Golden-answer semantic/factual scoring...")
+        expected = golden[run.query_id]["expected_answer"]
+        golden_scores = compute_golden(
+            client,
+            run,
+            expected,
+            generated_claims=faithfulness["faithfulness_claims"],
+        )
+        run_log_step_done(
+            f"Golden semantic={golden_scores['semantic_similarity']:.4f}, "
+            f"factual_f1={golden_scores['factual_correctness_f1']:.4f}, "
+            f"generated_claims={len(golden_scores['generated_claims'])}, "
+            f"expected_claims={len(golden_scores['expected_claims'])}",
+            step_started_at,
+        )
+        row.update({
+            "generation_score_semantic_similarity": golden_scores["semantic_similarity"],
+            "generation_score_factual_correctness_precision": golden_scores["factual_correctness_precision"],
+            "generation_score_factual_correctness_recall": golden_scores["factual_correctness_recall"],
+            "generation_score_factual_correctness_f1": golden_scores["factual_correctness_f1"],
+            "generation_score_expected_answer": expected,
+            "generation_score_generated_claims": json_cell(golden_scores["generated_claims"]),
+            "generation_score_expected_claims": json_cell(golden_scores["expected_claims"]),
+            "generation_score_precision_verdicts": json_cell(golden_scores["precision_verdicts"]),
+            "generation_score_recall_verdicts": json_cell(golden_scores["recall_verdicts"]),
+        })
+    else:
+        run_log("    → Golden-answer scoring skipped: no expected_answer for query_id")
+
+    row["total_input_tokens"] = client.input_tokens
+    row["total_output_tokens"] = client.output_tokens
+    row["total_tokens"] = client.input_tokens + client.output_tokens
+    run_log(
+        f"    ✓ run complete in {time.perf_counter() - run_started_at:.2f}s; "
+        f"tokens in/out/total={row['total_input_tokens']}/"
+        f"{row['total_output_tokens']}/{row['total_tokens']}"
+    )
+    return row
+
+
+def evaluate(args: argparse.Namespace) -> None:
+    total_started_at = time.perf_counter()
+    log("Starting local OpenAI-compatible RAG evaluation")
+    log(f"  answers_csv={args.answers_csv}")
+    log(f"  golden_csv={args.golden_csv or '<disabled>'}")
+    log(f"  output_csv={args.output_csv}")
+    log(f"  chat_base_url={args.chat_base_url}")
+    log(f"  chat_model={args.chat_model}")
+    log(f"  embedding_base_url={args.embedding_base_url}")
+    log(f"  embedding_model={args.embedding_model}")
+    log(f"  max_workers={args.max_workers}")
+
     load_started_at = time.perf_counter()
     golden = load_golden(args.golden_csv) if args.golden_csv else {}
     runs = load_rag_runs(args.answers_csv)
@@ -784,140 +936,22 @@ def evaluate(args: argparse.Namespace) -> None:
         f"k_values={k_values} in {time.perf_counter() - load_started_at:.2f}s"
     )
 
-    rows: list[dict[str, Any]] = []
     total = len(runs)
-    for idx, run in enumerate(runs, start=1):
-        run_started_at = time.perf_counter()
-        log("")
-        log(f"[{idx}/{total}] {run.query_id} run {run.query_run}: {run.query}")
-        log(
-            f"    passages={len(run.retrieved_passages)}, "
-            f"answer_parts={len(run.generated_answer_parts)}, "
-            f"answer_chars={len(run.generated_answer_raw)}"
-        )
-        client.input_tokens = 0
-        client.output_tokens = 0
-
-        row: dict[str, Any] = {
-            "query_id": run.query_id,
-            "query": run.query,
-            "query_run": run.query_run,
-            "generated_answer": generated_text(run.generated_answer_parts),
-        }
-        expected = golden.get(run.query_id, {}).get("expected_answer")
-
-        step_started_at = time.perf_counter()
-        log("    → UMBRELA retrieval scoring...")
-        umbrella = compute_umbrela(client, run, k_values, expected_answer=expected)
-        log_step_done(
-            f"UMBRELA mean={umbrella['mean_umbrela_score']:.4f}",
-            step_started_at,
-        )
-
-        step_started_at = time.perf_counter()
-        log("    → AutoNugget generation scoring...")
-        autonugget = compute_autonugget(
-            client,
-            run,
-            umbrella["umbrela_scores"],
-            expected_answer=expected,
-        )
-        log_step_done(
-            f"AutoNugget vital={autonugget['vital_nuggetizer_score']:.4f}, "
-            f"assign_mean={autonugget['mean_nugget_assignment_score']:.4f}, "
-            f"nuggets={len(autonugget['nuggets'])}",
-            step_started_at,
-        )
-
-        step_started_at = time.perf_counter()
-        log("    → Citation support scoring...")
-        citation = compute_citation(client, run)
-        log_step_done(f"Citation f1={citation['f1']:.4f}", step_started_at)
-
-        step_started_at = time.perf_counter()
-        log("    → Faithfulness NLI scoring against retrieved context...")
-        faithfulness = compute_faithfulness(client, run)
-        log_step_done(
-            f"Faithfulness={faithfulness['faithfulness_score']:.4f}, "
-            f"claims={len(faithfulness['faithfulness_claims'])}, "
-            f"unsupported={len(faithfulness['unsupported_claims'])}",
-            step_started_at,
-        )
-
-        step_started_at = time.perf_counter()
-        log("    → No-answer detection...")
-        no_answer = compute_no_answer(client, run)
-        log_step_done(f"No-answer query_answered={no_answer['query_answered']}", step_started_at)
-
-        step_started_at = time.perf_counter()
-        log("    → Hallucination/source-support scoring...")
-        hallucination = compute_hallucination_llm(client, run)
-        log_step_done(f"Hallucination/source-support={hallucination:.4f}", step_started_at)
-
-        row.update({
-            "retrieval_score_umbrela_scores": json_cell(umbrella["umbrela_scores"]),
-            "retrieval_score_precision_metrics": json_cell(umbrella["retrieval_scores"]),
-            "retrieval_score_ndcg_metrics": json_cell(umbrella["retrieval_scores"].get("NDCG@", {})),
-            "retrieval_score_mean_umbrela_score": umbrella["mean_umbrela_score"],
-            "generation_score_autonugget_scores": json_cell({
-                "nuggetizer_scores": autonugget["nuggetizer_scores"],
-                "nuggets": autonugget["nuggets"],
-                "labels": autonugget["labels"],
-                "assignments": autonugget["assignments"],
-                "assignment_scores": autonugget["assignment_scores"],
-            }),
-            "generation_score_mean_nugget_assignment_score": autonugget["mean_nugget_assignment_score"],
-            "generation_score_vital_nuggetizer_score": autonugget["vital_nuggetizer_score"],
-            "generation_score_hallucination_score": hallucination,
-            "generation_score_faithfulness_score": faithfulness["faithfulness_score"],
-            "generation_score_faithfulness_claims": json_cell(faithfulness["faithfulness_claims"]),
-            "generation_score_faithfulness_verdicts": json_cell(faithfulness["faithfulness_verdicts"]),
-            "generation_score_unsupported_claims": json_cell(faithfulness["unsupported_claims"]),
-            "generation_score_citation_scores": json_cell(citation),
-            "generation_score_citation_f1_score": citation["f1"],
-            "generation_score_no_answer_score": json_cell(no_answer),
-        })
-
-        if run.query_id in golden:
-            step_started_at = time.perf_counter()
-            log("    → Golden-answer semantic/factual scoring...")
-            expected = golden[run.query_id]["expected_answer"]
-            golden_scores = compute_golden(
-                client,
-                run,
-                expected,
-                generated_claims=faithfulness["faithfulness_claims"],
+    indexed_runs = [(idx, run) for idx, run in enumerate(runs, start=1)]
+    if args.max_workers <= 1:
+        rows = [
+            evaluate_run(args, run, golden, k_values, idx, total)
+            for idx, run in indexed_runs
+        ]
+    else:
+        log(f"Running evaluation with {args.max_workers} parallel workers")
+        with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+            rows = list(
+                executor.map(
+                    lambda item: evaluate_run(args, item[1], golden, k_values, item[0], total),
+                    indexed_runs,
+                )
             )
-            log_step_done(
-                f"Golden semantic={golden_scores['semantic_similarity']:.4f}, "
-                f"factual_f1={golden_scores['factual_correctness_f1']:.4f}, "
-                f"generated_claims={len(golden_scores['generated_claims'])}, "
-                f"expected_claims={len(golden_scores['expected_claims'])}",
-                step_started_at,
-            )
-            row.update({
-                "generation_score_semantic_similarity": golden_scores["semantic_similarity"],
-                "generation_score_factual_correctness_precision": golden_scores["factual_correctness_precision"],
-                "generation_score_factual_correctness_recall": golden_scores["factual_correctness_recall"],
-                "generation_score_factual_correctness_f1": golden_scores["factual_correctness_f1"],
-                "generation_score_expected_answer": expected,
-                "generation_score_generated_claims": json_cell(golden_scores["generated_claims"]),
-                "generation_score_expected_claims": json_cell(golden_scores["expected_claims"]),
-                "generation_score_precision_verdicts": json_cell(golden_scores["precision_verdicts"]),
-                "generation_score_recall_verdicts": json_cell(golden_scores["recall_verdicts"]),
-            })
-        else:
-            log("    → Golden-answer scoring skipped: no expected_answer for query_id")
-
-        row["total_input_tokens"] = client.input_tokens
-        row["total_output_tokens"] = client.output_tokens
-        row["total_tokens"] = client.input_tokens + client.output_tokens
-        rows.append(row)
-        log(
-            f"    ✓ run complete in {time.perf_counter() - run_started_at:.2f}s; "
-            f"tokens in/out/total={row['total_input_tokens']}/"
-            f"{row['total_output_tokens']}/{row['total_tokens']}"
-        )
 
     write_started_at = time.perf_counter()
     log("")
@@ -959,6 +993,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--k-values", default="1,3,5")
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--retries", type=int, default=2)
+    parser.add_argument("--max-workers", type=int, default=1, help="Parallel evaluation workers. Use 1 for sequential runs.")
     parser.add_argument("--log-level", default=os.getenv("RAG_EVAL_LOG_LEVEL", "INFO"), help="Logging level: DEBUG, INFO, WARNING, ERROR.")
     args = parser.parse_args()
 
@@ -971,6 +1006,8 @@ def parse_args() -> argparse.Namespace:
     missing = [name for name, value in required.items() if not value]
     if missing:
         parser.error("Missing required settings: " + ", ".join(missing))
+    if args.max_workers < 1:
+        parser.error("--max-workers must be >= 1")
     return args
 
 

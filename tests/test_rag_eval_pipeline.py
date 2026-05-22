@@ -44,6 +44,7 @@ def sample_config(root: str) -> dict:
             "embedding_api_key": "embed-key",
             "embedding_model": "embed-model",
             "k_values": "1,3,5",
+            "max_workers": 3,
         },
     }
 
@@ -119,6 +120,7 @@ class TestRagEvalPipeline(unittest.TestCase):
             self.assertIn("--answers-csv", eval_cmd)
             self.assertEqual(eval_cmd[eval_cmd.index("--answers-csv") + 1], str(task.generated_answers_csv))
             self.assertEqual(eval_cmd[eval_cmd.index("--output-csv") + 1], str(task.eval_result_csv))
+            self.assertEqual(eval_cmd[eval_cmd.index("--max-workers") + 1], "3")
 
     def test_null_optional_values_are_not_added_to_commands(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -232,6 +232,7 @@ def build_evaluation_command(config: dict[str, Any], task: PipelineTask) -> list
         "--chat-api-key": config_value(evaluation, "chat_api_key", default="EMPTY"),
         "--embedding-api-key": config_value(evaluation, "embedding_api_key"),
         "--k-values": evaluation.get("k_values"),
+        "--max-workers": evaluation.get("max_workers"),
         "--timeout": evaluation.get("timeout"),
         "--retries": evaluation.get("retries"),
         "--log-level": log_level,

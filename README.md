@@ -31,6 +31,7 @@ Use `scripts/eval-cfg.yaml` as the pipeline template. It defines:
 - page-size and similarity grids
 - retrieval endpoint settings
 - OpenAI-compatible chat and embedding settings
+- `generation.max_workers` and `evaluation.max_workers` for parallel API calls
 - logging level
 
 Secrets can be provided through environment variables referenced by `*_env`
