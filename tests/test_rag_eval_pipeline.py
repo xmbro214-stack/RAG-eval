@@ -3,6 +3,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -33,6 +34,7 @@ def sample_config(root: str) -> dict:
             "llm_model": "test-model",
             "top_k": 1024,
             "rerank_id": "reranker",
+            "max_tokens": 1000000,
             "repeat_query": 2,
         },
         "evaluation": {
@@ -133,11 +135,15 @@ class TestRagEvalPipeline(unittest.TestCase):
             config = sample_config(tmp)
             config["datasets"] = [{"id": "123", "name": "custom"}]
             config["grid"] = {"page_sizes": [10], "similarity_thresholds": [0.1]}
-            entries = pipeline.run_pipeline(config, stage="generate", dry_run=True, overwrite=False)
+            with patch("sys.stderr", new_callable=StringIO) as stderr:
+                entries = pipeline.run_pipeline(config, stage="generate", dry_run=True, overwrite=False)
 
             self.assertEqual(len(entries), 1)
             self.assertEqual(entries[0]["generation_status"], "dry_run")
             self.assertEqual(entries[0]["evaluation_status"], "not_requested")
+            self.assertIn("Pipeline started: stage=generate", stderr.getvalue())
+            self.assertIn("[1/1] Task dataset=custom", stderr.getvalue())
+            self.assertIn("--max-tokens", stderr.getvalue())
 
             manifest_path = Path(tmp) / "ragflow_grid" / "manifest.json"
             self.assertFalse(manifest_path.exists())

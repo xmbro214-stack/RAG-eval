@@ -280,11 +280,14 @@ def write_manifest(path: Path, entries: Iterable[dict[str, Any]]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def log(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
 def run_command(command: list[str], dry_run: bool) -> float:
     started_at = time.perf_counter()
-    if dry_run:
-        print("$ " + " ".join(command))
-    else:
+    log("$ " + " ".join(command))
+    if not dry_run:
         subprocess.run(command, cwd=ROOT, check=True)
     return time.perf_counter() - started_at
 
@@ -304,8 +307,18 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
     do_overwrite = should_overwrite(config, overwrite)
     entries: list[dict[str, Any]] = []
     manifest_path = output_root(config) / "manifest.json"
+    log(
+        "Pipeline started: "
+        f"stage={stage}, dry_run={dry_run}, overwrite={do_overwrite}, "
+        f"tasks={len(tasks)}, output_root={output_root(config)}"
+    )
 
-    for task in tasks:
+    for index, task in enumerate(tasks, start=1):
+        log(
+            f"[{index}/{len(tasks)}] Task dataset={task.dataset_name} "
+            f"(id={task.dataset_id}), page_size={task.page_size}, "
+            f"similarity={task.similarity_threshold}, output_dir={task.output_dir}"
+        )
         if not dry_run:
             task.output_dir.mkdir(parents=True, exist_ok=True)
         entry = manifest_entry(task)
@@ -317,15 +330,22 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
         if stage in ("all", "generate"):
             if task.generated_answers_csv.exists() and not do_overwrite:
                 entry["generation_status"] = "skipped_existing"
+                log(f"[{index}/{len(tasks)}] Generate skipped: existing {task.generated_answers_csv}")
             else:
                 command = build_generation_command(config, task)
                 entry["generation_command"] = command
                 try:
+                    log(f"[{index}/{len(tasks)}] Generate start -> {task.generated_answers_csv}")
                     entry["generation_seconds"] = run_command(command, dry_run)
                     entry["generation_status"] = "dry_run" if dry_run else "completed"
+                    log(
+                        f"[{index}/{len(tasks)}] Generate {entry['generation_status']} "
+                        f"in {entry['generation_seconds']:.2f}s"
+                    )
                 except subprocess.CalledProcessError as exc:
                     entry["generation_status"] = "failed"
                     entry["generation_error"] = str(exc)
+                    log(f"[{index}/{len(tasks)}] Generate failed: {exc}")
                     entries.append(entry)
                     write_manifest(manifest_path, entries)
                     raise
@@ -333,17 +353,25 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
         if stage in ("all", "eval"):
             if not dry_run and not task.generated_answers_csv.exists():
                 entry["evaluation_status"] = "missing_generated_answers"
+                log(f"[{index}/{len(tasks)}] Eval skipped: missing {task.generated_answers_csv}")
             elif task.eval_result_csv.exists() and not do_overwrite:
                 entry["evaluation_status"] = "skipped_existing"
+                log(f"[{index}/{len(tasks)}] Eval skipped: existing {task.eval_result_csv}")
             else:
                 command = build_evaluation_command(config, task)
                 entry["evaluation_command"] = command
                 try:
+                    log(f"[{index}/{len(tasks)}] Eval start -> {task.eval_result_csv}")
                     entry["evaluation_seconds"] = run_command(command, dry_run)
                     entry["evaluation_status"] = "dry_run" if dry_run else "completed"
+                    log(
+                        f"[{index}/{len(tasks)}] Eval {entry['evaluation_status']} "
+                        f"in {entry['evaluation_seconds']:.2f}s"
+                    )
                 except subprocess.CalledProcessError as exc:
                     entry["evaluation_status"] = "failed"
                     entry["evaluation_error"] = str(exc)
+                    log(f"[{index}/{len(tasks)}] Eval failed: {exc}")
                     entries.append(entry)
                     write_manifest(manifest_path, entries)
                     raise

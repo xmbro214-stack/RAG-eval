@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import sys
@@ -97,13 +98,19 @@ class HTTPJSONClient:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
+            log(
+                f"HTTP POST attempt {attempt + 1}/{self.retries + 1}: "
+                f"url={url}, payload={payload_summary(payload)}, body_bytes={len(body)}"
+            )
             req = request.Request(url, data=body, headers=headers, method="POST")
             try:
                 with request.urlopen(req, timeout=self.timeout) as resp:
                     text = resp.read().decode("utf-8")
+                    log(f"HTTP POST success: url={url}, status={resp.status}, response_bytes={len(text.encode('utf-8'))}")
                     return json.loads(text) if text else {}
             except (error.HTTPError, error.URLError, TimeoutError) as exc:
                 last_error = describe_http_error(exc)
+                log(f"HTTP POST failed: url={url}, error={last_error}")
                 if attempt < self.retries:
                     time.sleep(1.5 * (attempt + 1))
         raise RuntimeError(f"Request failed for {url}: {last_error}")
@@ -139,6 +146,12 @@ class OpenAICompatibleChatClient:
         if self.max_tokens is not None:
             payload["max_tokens"] = self.max_tokens
 
+        log(
+            "Chat completion request: "
+            f"url={self.chat_url}, model={self.model}, temperature={self.temperature}, "
+            f"max_tokens={self.max_tokens}, system_chars={len(system_prompt)}, "
+            f"user_chars={len(user_prompt)}, user_sha256={sha256_short(user_prompt)}"
+        )
         data = self.http.post_json(
             self.chat_url,
             payload,
@@ -169,6 +182,41 @@ def describe_http_error(exc: Exception) -> str:
             return f"HTTPError {exc.code} {exc.reason}: {body}"
         return f"HTTPError {exc.code} {exc.reason}"
     return str(exc)
+
+
+def sha256_short(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def payload_summary(payload: Any) -> str:
+    if isinstance(payload, dict):
+        parts = []
+        for key, value in payload.items():
+            if key.lower() in {"api_key", "authorization", "token"}:
+                parts.append(f"{key}=<redacted>")
+            elif key == "messages" and isinstance(value, list):
+                message_shapes = [
+                    {
+                        "role": item.get("role"),
+                        "content_chars": len(str(item.get("content", ""))),
+                    }
+                    for item in value
+                    if isinstance(item, dict)
+                ]
+                parts.append(f"messages={message_shapes}")
+            elif key == "input" and isinstance(value, list):
+                parts.append(f"input_count={len(value)}")
+            else:
+                parts.append(f"{key}={short_repr(value)}")
+        return "{" + ", ".join(parts) + "}"
+    return short_repr(payload)
+
+
+def short_repr(value: Any, limit: int = 240) -> str:
+    text = repr(value)
+    if len(text) > limit:
+        return text[:limit] + "...<truncated>"
+    return text
 
 
 def log(message: str) -> None:
@@ -520,6 +568,15 @@ def generate(args: argparse.Namespace) -> None:
     )
     retrieval_headers = build_retrieval_headers(args)
     prompt_template = load_prompt_template(args.prompt_template_file)
+    log(
+        "Generation settings: "
+        f"queries_csv={args.queries_csv}, output_csv={args.output_csv}, "
+        f"retrieval_url={args.retrieval_url}, chat_url={llm_client.chat_url}, "
+        f"llm_model={args.llm_model}, dataset_ids={args.dataset_ids}, "
+        f"page_size={args.page_size}, similarity_threshold={args.similarity_threshold}, "
+        f"top_k={args.top_k}, rerank_id={args.rerank_id}, max_tokens={args.max_tokens}, "
+        f"repeat_query={args.repeat_query}, max_workers={args.max_workers}"
+    )
 
     repeated = [
         (query_idx, query, run_idx)

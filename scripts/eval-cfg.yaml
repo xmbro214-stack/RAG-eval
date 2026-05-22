@@ -29,9 +29,7 @@ generation:
   llm_base_url: "example/http"
   llm_api_key_env: OPENAI_API_KEY
   llm_model: "examplemodel"
-  # Optional. Leave unset unless your chat endpoint accepts an explicit limit.
-  # Very large values can make OpenAI-compatible servers return HTTP 400.
-  max_tokens:
+  max_tokens: 1000000
 
 evaluation:
   chat_base_url_env: LOCAL_LLM_BASE_URL

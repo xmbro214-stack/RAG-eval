@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import ast
 import csv
+import hashlib
 import json
 import math
 import os
@@ -127,6 +128,11 @@ class OpenAICompatibleClient:
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
 
+        log(
+            "Chat judge request: "
+            f"url={self.chat_url}, model={self.chat_model}, max_tokens={max_tokens}, "
+            f"prompt_chars={len(prompt)}, prompt_sha256={sha256_short(prompt)}"
+        )
         data = self._post_json(self.chat_url, self.chat_api_key, payload)
         usage = data.get("usage") or {}
         self.input_tokens += int(usage.get("prompt_tokens") or 0)
@@ -137,6 +143,11 @@ class OpenAICompatibleClient:
         if not self.embedding_url or not self.embedding_model:
             raise ValueError("Embedding endpoint/model is required for semantic similarity.")
         payload = {"model": self.embedding_model, "input": texts}
+        log(
+            "Embedding request: "
+            f"url={self.embedding_url}, model={self.embedding_model}, "
+            f"input_count={len(texts)}, input_chars={[len(text) for text in texts]}"
+        )
         data = self._post_json(self.embedding_url, self.embedding_api_key, payload)
         return [item["embedding"] for item in data["data"]]
 
@@ -148,12 +159,19 @@ class OpenAICompatibleClient:
         }
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
+            log(
+                f"HTTP POST attempt {attempt + 1}/{self.retries + 1}: "
+                f"url={url}, payload={payload_summary(payload)}, body_bytes={len(body)}"
+            )
             req = request.Request(url, data=body, headers=headers, method="POST")
             try:
                 with request.urlopen(req, timeout=self.timeout) as resp:
-                    return json.loads(resp.read().decode("utf-8"))
+                    text = resp.read().decode("utf-8")
+                    log(f"HTTP POST success: url={url}, status={resp.status}, response_bytes={len(text.encode('utf-8'))}")
+                    return json.loads(text)
             except (error.HTTPError, error.URLError, TimeoutError) as exc:
                 last_error = describe_http_error(exc)
+                log(f"HTTP POST failed: url={url}, error={last_error}")
                 if attempt < self.retries:
                     time.sleep(1.5 * (attempt + 1))
         raise RuntimeError(f"Request failed for {url}: {last_error}")
@@ -185,6 +203,41 @@ def describe_http_error(exc: Exception) -> str:
             return f"HTTPError {exc.code} {exc.reason}: {body}"
         return f"HTTPError {exc.code} {exc.reason}"
     return str(exc)
+
+
+def sha256_short(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def payload_summary(payload: Any) -> str:
+    if isinstance(payload, dict):
+        parts = []
+        for key, value in payload.items():
+            if key.lower() in {"api_key", "authorization", "token"}:
+                parts.append(f"{key}=<redacted>")
+            elif key == "messages" and isinstance(value, list):
+                message_shapes = [
+                    {
+                        "role": item.get("role"),
+                        "content_chars": len(str(item.get("content", ""))),
+                    }
+                    for item in value
+                    if isinstance(item, dict)
+                ]
+                parts.append(f"messages={message_shapes}")
+            elif key == "input" and isinstance(value, list):
+                parts.append(f"input_count={len(value)}, input_chars={[len(str(item)) for item in value]}")
+            else:
+                parts.append(f"{key}={short_repr(value)}")
+        return "{" + ", ".join(parts) + "}"
+    return short_repr(payload)
+
+
+def short_repr(value: Any, limit: int = 240) -> str:
+    text = repr(value)
+    if len(text) > limit:
+        return text[:limit] + "...<truncated>"
+    return text
 
 
 def normalize_citations(text: str) -> str:
