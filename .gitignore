@@ -171,6 +171,7 @@ tests/outputs
 data/**
 !data/
 !data/.gitkeep
+!data/qa_golden.csv
 data/local_eval_results.csv
 data/local_eval_results_no_answer.csv
 data/recall_metrics_summary.csv

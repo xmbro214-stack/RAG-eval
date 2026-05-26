@@ -1,0 +1,73 @@
+query_id,query,expected_answer
+query_1,What is SM94?,"Defect information:
+SM94 M1
+SM94 M3
+Defect description:
+SM94 is visual discernable depression on the solder resist surface.(可按AI理解阐述得更清晰）
+Defect Criteria:
+Reject for single SR dent >40mils in any direction and visible at POR inspection magnification. 凹陷长>1mm且POR倍数下可见.
+1)Only the dent on SR  be scraped as SM94.只有阻焊上的凹陷报废代码为SM94.
+2) If the defect is dent as FM drop out and  no exposed underlying material should be scraped as SM94.若凹陷为异物掉落且未露底材报废代码为SM94.
+3) If The AVI machine  and FI has found defect（dent SM94）need follow below reject standard如果AVI设备和FI目检发现SM94(凹陷）需要参照以下拒绝标准:
+a. The dent on  Plastic Body and >1mm.在大铜面上且>1mm,
+b. The dent cross two metal traces  >1mm. 跨越两条线>1mm
+4)LSC Area reject criterial follow Plastic Body./LSC区域报废标准遵循组焊区规范 
+Note:/备注
+Accept SR Dent if there is no SR Damage/Crack, No underlying metal expose/inner layer is deformed/damaged regardless of size./如果没有SR 损伤/裂纹可接受SR 凹陷。不允许任意尺寸的暴露金属材料/内层线路变形或损伤
+Difference of SM94 M1 and SM94 M3:
+SM94 M1 is dent on all Plastic Body Area (including SR under BGA/LGA Pad) and C4 Area.   SM94 M1 mainly caused by FM attached on fixture/tooling/table which may touch the panels.
+SM94 M3 is undulation on Top side SR(tidy and regular unflat).  It caused by the process capabilities at BLY and SLY.
+Do you need me to provide more detailed potential root cause and improvement action?
+
+Potential Root Causes:
+ABF resin squeeze-out due to high-temperature processes in the lamination module; insufficient lamination pressure, temperature, or dwell time; contact interference from test fixtures; and surface anomalies or foreign material on the carrier tape.
+Improvement Actions:
+Optimization of process parameters; redesign of fixture structure; cleaning of the carrier tape and lamination platen."
+query_2,Please provide the detailed root cause of SM94 M3.,"Defect information:
+SM94 M3: Undulation on Top side SR(tidy and regular unflat)
+Potential root cause:
+Defect Criteria and improvement action: there is a image.
+Do you need me to provide history report for your reference?"
+query_3,Please provide me with the detailed root cause of SM94 M3.,"Defect information:
+SM94 M3: Undulation on Top side SR(tidy and regular unflat)
+Potential root cause:
+Defect Criteria and improvement action: there is a image.
+Do you need me to provide history report for your reference?"
+query_4,What is CU64 M1?,"Defect information:
+CU64 is Bad copper adhesion, M1 is Fixed unit and fixed location crush
+
+Defect description:
+CU64 M1 is Fixed unit and fixed location crush of bad copper adhesion.(可按AI理解阐述得更清晰）
+
+Defect criteria:
+Trace shift distance is great than or egual to 1/2 space,scrap; Trace wdith is less than 1/2 POR trace width,scrap;If the trace shift distance is less than 1/2 space and trace width is great than or egual to 1/2 POR trace width,release.
+偏移大于等于1/2间距，报废；线路小于原来的1/2，报废；如果小于1/2间距且线路≥原来的1/2，放行.
+Defect located on the current via area or future via area,scrap;The copper residue width of craush or scratch area is greater than or equal to 1/2 space,scrap;Defect located on the joint of pad and via,scrap;Defect located other area where is no current via or future via and the copper residue is less than 1/2 space,release.
+如果影响到当前孔或者未来孔或者盘的大小，报废；残铜大于等于间距1/2，报废；影响盘和线路连接的地方，报废；未影响到孔和未来孔且残铜小于间距1/2，放行.
+ For large copper area,trace wdith is less than 1/2 POR trace width,scrap;Trace width is great than or egual to 1/2 POR trace width,release.
+大铜面的曝光Mode CU64，大于等于间距的1/2，报废；小于间距的1/2，放行.
+
+Potential Root Causes:
+FM on the work stage of LXP tool caused fixed location dry film crush or scratch
+Improvement Actions:
+1.LXP outgoing VI check dry film surface
+2.Check and clean LXP work stage regularly."
+query_5,What is the root cause of CU64,"Defect information:
+CU64 M1: Fixed unit and fixed location crush of bad copper adhesion, Trace or pad be crushed by FM on LXP stage
+CU64 M2: Bad copper adhesion, it shows trace lifting on panel handling area, Defect foucs on munal handling area which be touch by OP finger or nails;
+Potential root cause:
+CU64 M1:  FM on the work stage of LXP tool caused fixed location dry film crush or scratch
+CU64 M2:  Employee voilate manually handling rule touch pattern area
+Improvement action:
+CU64 M1: 
+1.LXP outgoing VI check dry film surface
+2.Check and clean LXP work stage regularly.
+CU64 M2:
+1. Regular audit for all AOI/VRS/AOS OP hanlding;
+2. Training for AOI/VRS/AOS OP handling;
+
+Do you need me to provide history report for your reference?"
+query_6,Where is the CU64 M1 defect originating from?,"Defect information:
+CU64 M1: Fixed unit and fixed location crush of bad copper adhesion, Trace or pad be crushed by FM on LXP stage
+
+The CU64 M1 defect is caused by foreign material (FM) on the LXP tool work stage, resulting in dry film crushing or scratching at fixed locations. The FM originates from the environment and re-adheres to the work stage. To mitigate this issue, it is critical to control environmental FM levels to reduce the risk of recurrence."""
