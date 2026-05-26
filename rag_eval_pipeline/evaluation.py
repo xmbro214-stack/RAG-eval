@@ -1011,7 +1011,11 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-if __name__ == "__main__":
+def main() -> None:
     parsed_args = parse_args()
     configure_logging(parsed_args.log_level)
     evaluate(parsed_args)
+
+
+if __name__ == "__main__":
+    main()
