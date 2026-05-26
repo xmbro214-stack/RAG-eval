@@ -83,6 +83,8 @@ python scripts/visualize_local_eval_results.py \
   --mode compare \
   --data-root data \
   --pipeline-run ragflow_grid \
+  --left-dataset custom \
+  --right-dataset trd \
   --output-html reports/local_eval_results_comparison.html
 ```
 

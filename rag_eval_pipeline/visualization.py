@@ -46,6 +46,7 @@ DATASETS = [
     ("custom", "Custom chunking"),
     ("trd", "TRD chunking"),
 ]
+DATASET_LABELS = dict(DATASETS)
 
 DEFAULT_PIPELINE_RUN = "ragflow_grid"
 
@@ -541,9 +542,12 @@ def dataset_payload(path: Path, label: str) -> dict[str, Any]:
     }
 
 
-def read_pipeline_compare_inputs(run_root: Path) -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
+def read_pipeline_compare_inputs(
+    run_root: Path,
+    datasets: list[tuple[str, str]] = DATASETS,
+) -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
     results: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
-    for dataset, label in DATASETS:
+    for dataset, label in datasets:
         dataset_root = run_root / dataset
         if not dataset_root.exists():
             continue
@@ -558,7 +562,7 @@ def read_pipeline_compare_inputs(run_root: Path) -> dict[str, dict[str, dict[str
             results.setdefault(page_size, {}).setdefault(similarity, {})[dataset] = dataset_payload(path, label)
 
     complete_results: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
-    expected = {dataset for dataset, _ in DATASETS}
+    expected = {dataset for dataset, _ in datasets}
     for page_size, similarity_data in results.items():
         for similarity, page_data in similarity_data.items():
             if expected.issubset(page_data):
@@ -577,13 +581,15 @@ def resolve_compare_run_root(root: Path, pipeline_run: str = DEFAULT_PIPELINE_RU
     return root / "data" / "eval_runs" / pipeline_run
 
 
-def describe_compare_inputs(run_root: Path) -> str:
+def describe_compare_inputs(run_root: Path, datasets: list[tuple[str, str]] = DATASETS) -> str:
     expected_layout = (
-        f"{run_root}/custom/ps{{page_size}}_sim{{similarity}}/eval_result.csv and "
-        f"{run_root}/trd/ps{{page_size}}_sim{{similarity}}/eval_result.csv"
+        " and ".join(
+            f"{run_root}/{dataset}/ps{{page_size}}_sim{{similarity}}/eval_result.csv"
+            for dataset, _ in datasets
+        )
     )
     found = []
-    for dataset, _ in DATASETS:
+    for dataset, _ in datasets:
         dataset_root = run_root / dataset
         if dataset_root.exists():
             count = len(list(dataset_root.glob("ps*_sim*/eval_result.csv")))
@@ -593,17 +599,23 @@ def describe_compare_inputs(run_root: Path) -> str:
     return f"Expected paired comparison inputs like {expected_layout}. Found {', '.join(found)}."
 
 
-def read_compare_inputs(root: Path, pipeline_run: str = DEFAULT_PIPELINE_RUN) -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
+def read_compare_inputs(
+    root: Path,
+    pipeline_run: str = DEFAULT_PIPELINE_RUN,
+    datasets: list[tuple[str, str]] = DATASETS,
+) -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
     run_root = resolve_compare_run_root(root, pipeline_run)
-    pipeline_results = read_pipeline_compare_inputs(run_root)
+    pipeline_results = read_pipeline_compare_inputs(run_root, datasets)
     if not pipeline_results:
-        raise FileNotFoundError(f"Missing pipeline comparison inputs under: {run_root}. {describe_compare_inputs(run_root)}")
+        raise FileNotFoundError(
+            f"Missing pipeline comparison inputs under: {run_root}. {describe_compare_inputs(run_root, datasets)}"
+        )
     return pipeline_results
 
 
-def render_compare_cards(page_data: dict[str, dict[str, Any]]) -> str:
+def render_compare_cards(page_data: dict[str, dict[str, Any]], datasets: list[tuple[str, str]] = DATASETS) -> str:
     cards = []
-    for dataset, label in DATASETS:
+    for dataset, label in datasets:
         data = page_data[dataset]
         summary = data["summary"]
         rows = data["rows"]
@@ -626,12 +638,14 @@ def render_compare_cards(page_data: dict[str, dict[str, Any]]) -> str:
             """
         )
 
-    left = page_data["custom"]["summary"]["recall_average"]
-    right = page_data["trd"]["summary"]["recall_average"]
+    left_dataset, left_label = datasets[0]
+    right_dataset, right_label = datasets[1]
+    left = page_data[left_dataset]["summary"]["recall_average"]
+    right = page_data[right_dataset]["summary"]["recall_average"]
     cards.append(
         f"""
         <section class="compare-card highlight">
-          <span class="eyebrow">Custom - TRD</span>
+          <span class="eyebrow">{html.escape(left_label)} - {html.escape(right_label)}</span>
           <strong class="{delta_class(left, right)}">{delta_text(left, right)}</strong>
           <small>Recall avg delta for this setting</small>
         </section>
@@ -640,9 +654,11 @@ def render_compare_cards(page_data: dict[str, dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
-def render_metric_comparison(page_data: dict[str, dict[str, Any]]) -> str:
-    custom = page_data["custom"]["summary"]
-    trd = page_data["trd"]["summary"]
+def render_metric_comparison(page_data: dict[str, dict[str, Any]], datasets: list[tuple[str, str]] = DATASETS) -> str:
+    left_dataset, left_label = datasets[0]
+    right_dataset, right_label = datasets[1]
+    left_summary = page_data[left_dataset]["summary"]
+    right_summary = page_data[right_dataset]["summary"]
     rows = [
         ("recall_average", "Recall average", "recall"),
         *[(column, label, group) for column, label, group in METRICS],
@@ -650,8 +666,8 @@ def render_metric_comparison(page_data: dict[str, dict[str, Any]]) -> str:
     ]
     rendered = []
     for column, label, group in rows:
-        left = custom.get(column)
-        right = trd.get(column)
+        left = left_summary.get(column)
+        right = right_summary.get(column)
         rendered.append(
             f"""
             <tr>
@@ -667,8 +683,8 @@ def render_metric_comparison(page_data: dict[str, dict[str, Any]]) -> str:
         <thead>
           <tr>
             <th>metric</th>
-            <th>custom</th>
-            <th>trd</th>
+            <th>{html.escape(left_label)}</th>
+            <th>{html.escape(right_label)}</th>
             <th>delta</th>
           </tr>
         </thead>
@@ -681,16 +697,18 @@ def query_map(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {item["query_id"]: item for item in data["queries"]}
 
 
-def render_query_comparison(page_data: dict[str, dict[str, Any]]) -> str:
-    custom_queries = query_map(page_data["custom"])
-    trd_queries = query_map(page_data["trd"])
+def render_query_comparison(page_data: dict[str, dict[str, Any]], datasets: list[tuple[str, str]] = DATASETS) -> str:
+    left_dataset, left_label = datasets[0]
+    right_dataset, right_label = datasets[1]
+    left_queries = query_map(page_data[left_dataset])
+    right_queries = query_map(page_data[right_dataset])
     rows = []
-    for query_id in sorted(set(custom_queries) | set(trd_queries)):
-        custom = custom_queries.get(query_id, {})
-        trd = trd_queries.get(query_id, {})
-        query = custom.get("query") or trd.get("query") or ""
-        left = custom.get("recall_average")
-        right = trd.get("recall_average")
+    for query_id in sorted(set(left_queries) | set(right_queries)):
+        left_query = left_queries.get(query_id, {})
+        right_query = right_queries.get(query_id, {})
+        query = left_query.get("query") or right_query.get("query") or ""
+        left = left_query.get("recall_average")
+        right = right_query.get("recall_average")
         rows.append(
             f"""
             <tr>
@@ -699,9 +717,9 @@ def render_query_comparison(page_data: dict[str, dict[str, Any]]) -> str:
               <td class="{score_class(left)}">{fmt(left)}</td>
               <td class="{score_class(right)}">{fmt(right)}</td>
               <td class="{delta_class(left, right)}">{delta_text(left, right)}</td>
-              <td>{fmt(custom.get('generation_score_factual_correctness_recall'))} / {fmt(trd.get('generation_score_factual_correctness_recall'))}</td>
-              <td>{fmt(custom.get('generation_score_vital_nuggetizer_score'))} / {fmt(trd.get('generation_score_vital_nuggetizer_score'))}</td>
-              <td>{fmt(custom.get('retrieval_score_mean_umbrela_score'))} / {fmt(trd.get('retrieval_score_mean_umbrela_score'))}</td>
+              <td>{fmt(left_query.get('generation_score_factual_correctness_recall'))} / {fmt(right_query.get('generation_score_factual_correctness_recall'))}</td>
+              <td>{fmt(left_query.get('generation_score_vital_nuggetizer_score'))} / {fmt(right_query.get('generation_score_vital_nuggetizer_score'))}</td>
+              <td>{fmt(left_query.get('retrieval_score_mean_umbrela_score'))} / {fmt(right_query.get('retrieval_score_mean_umbrela_score'))}</td>
             </tr>
             """
         )
@@ -711,12 +729,12 @@ def render_query_comparison(page_data: dict[str, dict[str, Any]]) -> str:
           <tr>
             <th>query_id</th>
             <th>query</th>
-            <th>custom recall</th>
-            <th>trd recall</th>
+            <th>{html.escape(left_label)} recall</th>
+            <th>{html.escape(right_label)} recall</th>
             <th>delta</th>
-            <th>factual C/T</th>
-            <th>vital C/T</th>
-            <th>UMBRELA C/T</th>
+            <th>factual L/R</th>
+            <th>vital L/R</th>
+            <th>UMBRELA L/R</th>
           </tr>
         </thead>
         <tbody>{''.join(rows)}</tbody>
@@ -751,6 +769,7 @@ def render_compact_run(row: dict[str, str] | None, label: str) -> str:
         render_metric_bar("UMBRELA", metric_value(row, "retrieval_score_mean_umbrela_score")),
     ]
     no_answer = pretty_json(row.get("generation_score_no_answer_score", ""))
+    umbrella_detail = pretty_json(row.get("retrieval_score_umbrela_scores", ""))
     return f"""
       <section class="side-run">
         <div class="side-title">
@@ -767,6 +786,10 @@ def render_compact_run(row: dict[str, str] | None, label: str) -> str:
           <pre>{html.escape(no_answer)}</pre>
         </details>
         <details>
+          <summary>UMBRELA passage scores</summary>
+          <pre>{html.escape(umbrella_detail)}</pre>
+        </details>
+        <details>
           <summary>Expected answer preview</summary>
           <pre>{expected_preview or 'N/A'}</pre>
         </details>
@@ -774,16 +797,18 @@ def render_compact_run(row: dict[str, str] | None, label: str) -> str:
     """
 
 
-def render_detail_comparison(page_data: dict[str, dict[str, Any]]) -> str:
-    custom_rows = row_map(page_data["custom"]["rows"])
-    trd_rows = row_map(page_data["trd"]["rows"])
+def render_detail_comparison(page_data: dict[str, dict[str, Any]], datasets: list[tuple[str, str]] = DATASETS) -> str:
+    left_dataset, left_label = datasets[0]
+    right_dataset, right_label = datasets[1]
+    left_rows = row_map(page_data[left_dataset]["rows"])
+    right_rows = row_map(page_data[right_dataset]["rows"])
     cards = []
-    for query_id in sorted(set(custom_rows) | set(trd_rows)):
-        custom = custom_rows.get(query_id, [None])[0]
-        trd = trd_rows.get(query_id, [None])[0]
-        query = (custom or trd or {}).get("query", "")
-        custom_avg = recall_average(custom) if custom else None
-        trd_avg = recall_average(trd) if trd else None
+    for query_id in sorted(set(left_rows) | set(right_rows)):
+        left = left_rows.get(query_id, [None])[0]
+        right = right_rows.get(query_id, [None])[0]
+        query = (left or right or {}).get("query", "")
+        left_avg = recall_average(left) if left else None
+        right_avg = recall_average(right) if right else None
         cards.append(
             f"""
             <article class="compare-detail" data-query="{html.escape(query_id.lower())}" data-text="{html.escape((query_id + ' ' + query).lower())}">
@@ -792,11 +817,11 @@ def render_detail_comparison(page_data: dict[str, dict[str, Any]]) -> str:
                   <span class="eyebrow">{html.escape(query_id)}</span>
                   <h3>{html.escape(query)}</h3>
                 </div>
-                <strong class="{delta_class(custom_avg, trd_avg)}">delta {delta_text(custom_avg, trd_avg)}</strong>
+                <strong class="{delta_class(left_avg, right_avg)}">delta {delta_text(left_avg, right_avg)}</strong>
               </div>
               <div class="side-grid">
-                {render_compact_run(custom, "Custom")}
-                {render_compact_run(trd, "TRD")}
+                {render_compact_run(left, left_label)}
+                {render_compact_run(right, right_label)}
               </div>
             </article>
             """
@@ -804,20 +829,26 @@ def render_detail_comparison(page_data: dict[str, dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
-def render_combo_section(page_size: str, similarity: str, page_data: dict[str, dict[str, Any]]) -> str:
+def render_combo_section(
+    page_size: str,
+    similarity: str,
+    page_data: dict[str, dict[str, Any]],
+    datasets: list[tuple[str, str]] = DATASETS,
+) -> str:
+    left_dataset = datasets[0][0]
     return f"""
       <section class="page-section" data-page-size="{html.escape(page_size)}" data-similarity="{html.escape(similarity)}">
         <section class="compare-grid">
-          {render_compare_cards(page_data)}
+          {render_compare_cards(page_data, datasets)}
         </section>
         <section class="panel two-col">
           <div>
             <h2>指标对比</h2>
-            {render_metric_comparison(page_data)}
+            {render_metric_comparison(page_data, datasets)}
           </div>
           <div>
             <h2>Query 对比</h2>
-            {render_query_comparison(page_data)}
+            {render_query_comparison(page_data, datasets)}
           </div>
         </section>
         <section class="panel">
@@ -825,17 +856,20 @@ def render_combo_section(page_size: str, similarity: str, page_data: dict[str, d
           <div class="toolbar">
             <select class="queryFilter">
               <option value="">All query_id</option>
-              {''.join(f'<option value="{html.escape(item["query_id"].lower())}">{html.escape(item["query_id"])}</option>' for item in page_data["custom"]["queries"])}
+              {''.join(f'<option value="{html.escape(item["query_id"].lower())}">{html.escape(item["query_id"])}</option>' for item in page_data[left_dataset]["queries"])}
             </select>
             <input class="searchBox" type="search" placeholder="Search query text">
           </div>
-          <div class="detailCards">{render_detail_comparison(page_data)}</div>
+          <div class="detailCards">{render_detail_comparison(page_data, datasets)}</div>
         </section>
       </section>
     """
 
 
-def render_compare_html(results: dict[str, dict[str, dict[str, dict[str, Any]]]]) -> str:
+def render_compare_html(
+    results: dict[str, dict[str, dict[str, dict[str, Any]]]],
+    datasets: list[tuple[str, str]] = DATASETS,
+) -> str:
     similarities = sorted(
         {similarity for similarity_data in results.values() for similarity in similarity_data},
         key=combo_sort_key,
@@ -849,7 +883,7 @@ def render_compare_html(results: dict[str, dict[str, dict[str, dict[str, Any]]]]
         for similarity in similarities
     )
     sections = "\n".join(
-        render_combo_section(page_size, similarity, page_data)
+        render_combo_section(page_size, similarity, page_data, datasets)
         for page_size in sorted(results, key=combo_sort_key)
         for similarity, page_data in sorted(results[page_size].items(), key=lambda item: combo_sort_key(item[0]))
     )
@@ -1127,13 +1161,28 @@ def render_compare_html(results: dict[str, dict[str, dict[str, dict[str, Any]]]]
 """
 
 
+def dataset_label(dataset: str, explicit_label: str | None = None) -> str:
+    if explicit_label:
+        return explicit_label
+    return DATASET_LABELS.get(dataset, dataset)
+
+
+def compare_datasets_from_args(args: argparse.Namespace) -> list[tuple[str, str]]:
+    if args.left_dataset == args.right_dataset:
+        raise ValueError("--left-dataset and --right-dataset must be different.")
+    return [
+        (args.left_dataset, dataset_label(args.left_dataset, args.left_label)),
+        (args.right_dataset, dataset_label(args.right_dataset, args.right_label)),
+    ]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create an HTML viewer for local eval result CSV files.")
     parser.add_argument(
         "--mode",
         choices=["compare", "single"],
         default="compare",
-        help="compare reads data/custom and data/trd cfg files; single renders one CSV.",
+        help="compare reads two dataset folders under data/eval_runs/{run}; single renders one CSV.",
     )
     parser.add_argument("--input-csv", default="data/local_eval_results.csv")
     parser.add_argument("--output-html", default="reports/local_eval_results_comparison.html")
@@ -1146,6 +1195,10 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--pipeline-run", default=DEFAULT_PIPELINE_RUN, help="Run name under data/eval_runs for compare mode.")
+    parser.add_argument("--left-dataset", default="custom", help="Left comparison folder under data/eval_runs/{run}.")
+    parser.add_argument("--right-dataset", default="trd", help="Right comparison folder under data/eval_runs/{run}.")
+    parser.add_argument("--left-label", help="Display label for --left-dataset.")
+    parser.add_argument("--right-label", help="Display label for --right-dataset.")
     return parser.parse_args()
 
 
@@ -1162,8 +1215,9 @@ def main() -> None:
         print(f"Wrote {len(rows)} rows to {output_path}")
         return
 
-    results = read_compare_inputs(Path(args.data_root), args.pipeline_run)
-    output_path.write_text(render_compare_html(results), encoding="utf-8")
+    datasets = compare_datasets_from_args(args)
+    results = read_compare_inputs(Path(args.data_root), args.pipeline_run, datasets)
+    output_path.write_text(render_compare_html(results, datasets), encoding="utf-8")
     total_rows = sum(
         len(dataset_data["rows"])
         for similarity_data in results.values()
