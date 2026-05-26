@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rag_eval_pipeline.visualization import read_compare_inputs, render_compare_html
+from rag_eval_pipeline.visualization import read_compare_inputs, render_compare_html, resolve_compare_run_root
 
 
 class TestVisualization(unittest.TestCase):
@@ -37,6 +37,14 @@ class TestVisualization(unittest.TestCase):
             self.assertEqual(sorted(results["10"]), ["0.1"])
             self.assertIn("similaritySelect", rendered)
             self.assertIn('data-similarity="0.1"', rendered)
+
+    def test_compare_input_root_accepts_data_directory(self):
+        root = Path("/tmp/project")
+
+        self.assertEqual(
+            resolve_compare_run_root(root / "data", "ragflow_grid"),
+            root / "data" / "eval_runs" / "ragflow_grid",
+        )
 
 
 if __name__ == "__main__":

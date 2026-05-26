@@ -566,11 +566,38 @@ def read_pipeline_compare_inputs(run_root: Path) -> dict[str, dict[str, dict[str
     return complete_results
 
 
+def resolve_compare_run_root(root: Path, pipeline_run: str = DEFAULT_PIPELINE_RUN) -> Path:
+    root = root.expanduser()
+    if root.name == "data":
+        return root / "eval_runs" / pipeline_run
+    if root.name == "eval_runs":
+        return root / pipeline_run
+    if root.name == pipeline_run and root.parent.name == "eval_runs":
+        return root
+    return root / "data" / "eval_runs" / pipeline_run
+
+
+def describe_compare_inputs(run_root: Path) -> str:
+    expected_layout = (
+        f"{run_root}/custom/ps{{page_size}}_sim{{similarity}}/eval_result.csv and "
+        f"{run_root}/trd/ps{{page_size}}_sim{{similarity}}/eval_result.csv"
+    )
+    found = []
+    for dataset, _ in DATASETS:
+        dataset_root = run_root / dataset
+        if dataset_root.exists():
+            count = len(list(dataset_root.glob("ps*_sim*/eval_result.csv")))
+            found.append(f"{dataset}: {count} eval_result.csv")
+        else:
+            found.append(f"{dataset}: missing directory")
+    return f"Expected paired comparison inputs like {expected_layout}. Found {', '.join(found)}."
+
+
 def read_compare_inputs(root: Path, pipeline_run: str = DEFAULT_PIPELINE_RUN) -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
-    run_root = root / "data" / "eval_runs" / pipeline_run
+    run_root = resolve_compare_run_root(root, pipeline_run)
     pipeline_results = read_pipeline_compare_inputs(run_root)
     if not pipeline_results:
-        raise FileNotFoundError(f"Missing pipeline comparison inputs under: {run_root}")
+        raise FileNotFoundError(f"Missing pipeline comparison inputs under: {run_root}. {describe_compare_inputs(run_root)}")
     return pipeline_results
 
 
@@ -1110,6 +1137,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--input-csv", default="data/local_eval_results.csv")
     parser.add_argument("--output-html", default="reports/local_eval_results_comparison.html")
+    parser.add_argument(
+        "--data-root",
+        default=".",
+        help=(
+            "Project root, data directory, eval_runs directory, or a specific "
+            "data/eval_runs/{run} directory for compare mode."
+        ),
+    )
     parser.add_argument("--pipeline-run", default=DEFAULT_PIPELINE_RUN, help="Run name under data/eval_runs for compare mode.")
     return parser.parse_args()
 
@@ -1127,7 +1162,7 @@ def main() -> None:
         print(f"Wrote {len(rows)} rows to {output_path}")
         return
 
-    results = read_compare_inputs(Path.cwd(), args.pipeline_run)
+    results = read_compare_inputs(Path(args.data_root), args.pipeline_run)
     output_path.write_text(render_compare_html(results), encoding="utf-8")
     total_rows = sum(
         len(dataset_data["rows"])

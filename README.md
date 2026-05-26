@@ -81,6 +81,7 @@ Render a comparison report for a pipeline run:
 ```bash
 python scripts/visualize_local_eval_results.py \
   --mode compare \
+  --data-root data \
   --pipeline-run ragflow_grid \
   --output-html reports/local_eval_results_comparison.html
 ```
