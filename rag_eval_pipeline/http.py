@@ -47,6 +47,29 @@ def payload_summary(payload: Any) -> str:
     return short_repr(payload)
 
 
+def response_preview(text: str, limit: int = 500) -> str:
+    text = text.replace("\n", "\\n").replace("\r", "\\r")
+    if len(text) > limit:
+        return text[:limit] + "...<truncated>"
+    return text
+
+
+def response_summary(value: Any) -> str:
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            if isinstance(item, list):
+                parts.append(f"{key}=list(len={len(item)})")
+            elif isinstance(item, dict):
+                parts.append(f"{key}=dict(keys={sorted(str(k) for k in item.keys())[:12]})")
+            else:
+                parts.append(f"{key}={short_repr(item, 120)}")
+        return "{" + ", ".join(parts) + "}"
+    if isinstance(value, list):
+        return f"list(len={len(value)}, first={short_repr(value[0], 160) if value else 'None'})"
+    return short_repr(value)
+
+
 def short_repr(value: Any, limit: int = 240) -> str:
     text = repr(value)
     if len(text) > limit:

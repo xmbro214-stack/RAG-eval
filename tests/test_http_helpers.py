@@ -2,7 +2,7 @@ import unittest
 from io import BytesIO
 from urllib.error import HTTPError
 
-from rag_eval_pipeline.http import describe_http_error, payload_summary
+from rag_eval_pipeline.http import describe_http_error, payload_summary, response_preview, response_summary
 
 
 class TestHttpHelpers(unittest.TestCase):
@@ -27,6 +27,18 @@ class TestHttpHelpers(unittest.TestCase):
         )
 
         self.assertIn('{"error":"bad"}', describe_http_error(error))
+
+    def test_response_preview_flattens_and_truncates_body(self):
+        preview = response_preview("line1\nline2", limit=8)
+
+        self.assertEqual(preview, "line1\\nl...<truncated>")
+
+    def test_response_summary_reports_collection_shapes(self):
+        summary = response_summary({"code": 0, "data": {"chunks": []}, "message": "success"})
+
+        self.assertIn("code=0", summary)
+        self.assertIn("data=dict(keys=['chunks'])", summary)
+        self.assertIn("message='success'", summary)
 
 
 if __name__ == "__main__":

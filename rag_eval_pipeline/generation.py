@@ -42,7 +42,13 @@ from pathlib import Path
 from typing import Any
 from urllib import error, request
 
-from rag_eval_pipeline.http import describe_http_error, payload_summary, sha256_short
+from rag_eval_pipeline.http import (
+    describe_http_error,
+    payload_summary,
+    response_preview,
+    response_summary,
+    sha256_short,
+)
 
 
 FIELDNAMES = [
@@ -112,7 +118,8 @@ class HTTPJSONClient:
                     text = resp.read().decode("utf-8")
                     LOGGER.debug(
                         f"HTTP POST success: url={url}, status={resp.status}, "
-                        f"response_bytes={len(text.encode('utf-8'))}"
+                        f"response_bytes={len(text.encode('utf-8'))}, "
+                        f"response_preview={response_preview(text)}"
                     )
                     return json.loads(text) if text else {}
             except (error.HTTPError, error.URLError, TimeoutError) as exc:
@@ -495,6 +502,12 @@ def process_query_run(
         )
         max_passages = args.max_passages or args.page_size
         passages = extract_passages(retrieval_json, max_passages)
+        if not passages:
+            LOGGER.warning(
+                "No retrieval passages extracted: "
+                f"query_id={query.query_id}, run={run_idx}, "
+                f"retrieval_summary={response_summary(retrieval_json)}"
+            )
         prompt = render_prompt(prompt_template, query, passages)
         generated_answer = llm_client.chat(args.system_prompt, prompt)
         return rows_for_result(query, run_idx, passages, generated_answer)
