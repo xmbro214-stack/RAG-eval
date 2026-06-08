@@ -166,7 +166,7 @@ scripts/eval-cfg.yaml     默认评估配置
 没有真实 retrieval 或模型服务时，可以启动 mock：
 
 ```powershell
-python scripts/mock_retrieval_server.py --host 127.0.0.1 --port 9380 --golden-csv data/qa_golden_smoke.csv
+python scripts/mock_retrieval_server.py --host 127.0.0.1 --port 9380 --golden-csv data/qa_golden.csv
 python scripts/mock_openai_server.py --host 127.0.0.1 --port 8011
 ```
 

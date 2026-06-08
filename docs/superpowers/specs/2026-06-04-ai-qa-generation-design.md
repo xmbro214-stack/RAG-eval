@@ -168,7 +168,7 @@ The save action should continue using the existing manual QA append endpoint:
 
 ```json
 {
-  "target_dataset": "data/qa_golden_2.csv",
+  "target_dataset": "data/qa_golden.csv",
   "question": "What is SM94 M3?",
   "expected_answer": "Confirmed answer..."
 }

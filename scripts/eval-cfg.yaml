@@ -1,5 +1,5 @@
-queries_csv: data/qa_golden_2.csv
-golden_csv: data/qa_golden_2.csv
+queries_csv: data/qa_golden.csv
+golden_csv: data/qa_golden.csv
 
 output:
   root: data/eval_runs
@@ -31,18 +31,18 @@ generation:
   max_workers: 1
   timeout: 120
   retries: 2
-  llm_base_url: "https://token-plan-cn.xiaomimimo.com/v1"
-  llm_api_key: "tp-cpb1bexsso3fb5hnqv1aq6uzke8yzi4dmjl81fqmykzh5xdh"
-  llm_model: "mimo-v2.5-pro"
+  llm_base_url: "http://localhost:8000/v1"
+  llm_api_key: "EMPTY"
+  llm_model: "mock-chat"
   max_tokens: 4096
 
 evaluation:
-  chat_base_url: "https://token-plan-cn.xiaomimimo.com/v1"
-  chat_api_key: "tp-cpb1bexsso3fb5hnqv1aq6uzke8yzi4dmjl81fqmykzh5xdh"
-  chat_model: "mimo-v2.5-pro"
-  embedding_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  embedding_api_key: "sk-5177daad85294ac1a05c1bd42a3008a0"
-  embedding_model: "text-embedding-v4"
+  chat_base_url: "http://localhost:8000/v1"
+  chat_api_key: "EMPTY"
+  chat_model: "mock-chat"
+  embedding_base_url: "http://localhost:8000/v1"
+  embedding_api_key: "EMPTY"
+  embedding_model: "mock-embedding"
   k_values: "1,3,5"
   max_workers: 1
   timeout: 60

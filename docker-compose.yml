@@ -7,8 +7,6 @@ services:
     volumes:
       - .:/workspace:z
       - uv-cache:/root/.cache/uv
-    env_file:
-      - .env
     environment:
       PYTHONUNBUFFERED: "1"
     extra_hosts:

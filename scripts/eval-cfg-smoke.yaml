@@ -1,5 +1,5 @@
-queries_csv: data/qa_golden_smoke.csv
-golden_csv: data/qa_golden_smoke.csv
+queries_csv: data/qa_golden.csv
+golden_csv: data/qa_golden.csv
 
 output:
   root: data/eval_runs

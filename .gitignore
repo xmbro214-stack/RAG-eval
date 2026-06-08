@@ -168,6 +168,7 @@ queries.csv
 results/
 tests/outputs
 .DS_Store
+.superpowers/
 data/**
 !data/
 !data/.gitkeep

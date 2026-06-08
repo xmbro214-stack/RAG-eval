@@ -705,7 +705,7 @@ golden_csv: data/uploaded_datasets/demo.csv
 PowerShell 也可以直接调用接口：
 
 ```powershell
-curl.exe -F "file=@data\qa_golden_smoke.csv" -F "name=demo" http://127.0.0.1:9000/api/datasets/upload
+curl.exe -F "file=@data\qa_golden.csv" -F "name=demo" http://127.0.0.1:9000/api/datasets/upload
 ```
 ```
 
@@ -764,7 +764,7 @@ python -m rag_eval_pipeline.api --host 127.0.0.1 --port 9000
 In a second terminal, upload a known-good CSV:
 
 ```powershell
-curl.exe -F "file=@data\qa_golden_smoke.csv" -F "name=demo" http://127.0.0.1:9000/api/datasets/upload
+curl.exe -F "file=@data\qa_golden.csv" -F "name=demo" http://127.0.0.1:9000/api/datasets/upload
 ```
 
 Expected response contains:
@@ -793,4 +793,3 @@ Press `Ctrl+C` in the terminal running `python -m rag_eval_pipeline.api`.
 - Spec coverage: API service, `GET /datasets`, `POST /api/datasets/upload`, validation, storage, duplicate naming, JSON responses, pipeline integration, tests, and README updates are covered.
 - Placeholder scan: no placeholder tasks remain.
 - Type consistency: helper names are consistent across tests and implementation: `slugify_dataset_name`, `parse_and_validate_csv`, `save_dataset`, `render_upload_page`, `DatasetUploadHandler`, and `make_handler`.
-

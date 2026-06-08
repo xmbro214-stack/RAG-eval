@@ -837,9 +837,8 @@ def list_datasets(
 
     default_golden_path = GOLDEN_CSV_PATH.resolve()
     should_offer_default_golden = config_path.resolve() == DEFAULT_PIPELINE_CONFIG.resolve()
-    known_paths = {str(dataset.get("path") or "") for dataset in datasets}
     default_golden_relative_path = relative_repo_path(default_golden_path)
-    if should_offer_default_golden and default_golden_path.is_file() and default_golden_relative_path not in known_paths:
+    if should_offer_default_golden and default_golden_path.is_file():
         datasets.append(
             {
                 "name": default_golden_path.stem,
@@ -2934,27 +2933,27 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
   <title>AT&amp;S RAG Evaluation Console</title>
   <style>
     :root {{
-      --ats-blue: #176f95;
-      --ats-blue-dark: #0b4f6c;
-      --ats-blue-deep: #08384c;
-      --ats-blue-soft: #e6f5fa;
-      --ats-cyan: #1aa6c8;
-      --ats-teal: #1aa6c8;
-      --ats-blue-50: #f2fbfd;
-      --ats-blue-100: #e6f5fa;
-      --ats-blue-200: #c6dce5;
-      --ats-blue-300: #8fbfd1;
-      --ats-blue-700: #176f95;
-      --ink: #0d3445;
-      --muted: #4f6f7c;
-      --line: #c6dce5;
+      --ats-blue: #004b93;
+      --ats-blue-dark: #003b74;
+      --ats-blue-deep: #002f5f;
+      --ats-blue-soft: #eaf3fb;
+      --ats-cyan: #00a7c8;
+      --ats-teal: #00a7c8;
+      --ats-blue-50: #f6f9fd;
+      --ats-blue-100: #edf4fb;
+      --ats-blue-200: #d8e4f0;
+      --ats-blue-300: #b7cce1;
+      --ats-blue-700: #005bac;
+      --ink: #0b2540;
+      --muted: #526b86;
+      --line: #d8e4f0;
       --surface: #ffffff;
       --bg: #f2fbfd;
       --paper: #fbfdff;
       --shadow-soft: 0 14px 36px rgba(8, 56, 76, 0.11);
       --error: #b3261e;
-      --success: #176f95;
-      --warning: #176f95;
+      --success: #207c50;
+      --warning: #9a6b00;
     }}
 
     * {{ box-sizing: border-box; }}
@@ -3021,7 +3020,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       height: 100vh;
       padding: 18px 12px;
       color: #ffffff;
-      background: linear-gradient(180deg, var(--ats-blue-deep), var(--ats-blue-dark) 54%, var(--ats-blue));
+      background: linear-gradient(135deg, var(--ats-blue-dark), var(--ats-blue));
       border-right: 1px solid rgba(255, 255, 255, .12);
       display: flex;
       flex-direction: column;
@@ -3052,13 +3051,13 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     .nav-button {{
       display: flex;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: center;
       width: 100%;
       min-height: 40px;
       border: 0;
       border-radius: 6px;
       padding: 9px 11px;
-      text-align: left;
+      text-align: center;
       color: #dbeeff;
       background: transparent;
       box-shadow: none;
@@ -3159,7 +3158,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       justify-self: center;
       padding: 20px;
       border: 1px solid var(--line);
-      border-top: 3px solid var(--ats-cyan);
+      border-top: 4px solid var(--ats-cyan);
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.98);
       box-shadow: var(--shadow-soft);
@@ -3485,17 +3484,17 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     }}
 
     .dataset-section-stack {{
-      --qa-surface: var(--ats-blue-50);
+      --qa-surface: #f6f9fd;
       --qa-surface-strong: var(--ats-blue-100);
       --qa-border: rgba(216, 228, 240, .9);
       --qa-border-solid: #d8e4f0;
       --qa-accent: var(--ats-blue-700);
       --qa-accent-soft: #eef6ff;
       --qa-amber: var(--ats-blue-700);
-      --qa-card-radius: 8px;
-      --qa-button-radius: 8px;
+      --qa-card-radius: 16px;
+      --qa-button-radius: 10px;
       --qa-control-height: 44px;
-      --qa-control-radius: 8px;
+      --qa-control-radius: 10px;
       --qa-shadow: 0 10px 26px rgba(30, 49, 68, .08);
       display: grid;
       gap: 16px;
@@ -3524,7 +3523,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       gap: 18px;
       min-width: 0;
       padding: 20px 24px 24px;
-      background: transparent;
+      background: #f6f9fd;
     }}
 
     .dataset-flow-card {{
@@ -3587,7 +3586,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       font-weight: 900;
       line-height: 1;
       flex: 0 0 auto;
-      box-shadow: 0 6px 14px rgba(23, 111, 149, .13);
+      box-shadow: 0 6px 14px rgba(0, 75, 147, .10);
     }}
 
     .dataset-inventory-header {{
@@ -3743,7 +3742,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       width: 150px;
       min-height: var(--qa-control-height);
       color: #ffffff;
-      background: var(--ats-blue-700);
+      background: #005bac;
       border: 1px solid var(--ats-blue-700);
       border-radius: var(--qa-control-radius);
       box-shadow: 0 8px 18px rgba(0, 91, 172, .16);
@@ -4181,7 +4180,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       min-height: 52px;
       padding: 8px 14px;
       border: 1px solid rgba(183, 204, 225, .72);
-      border-radius: 8px;
+      border-radius: 12px;
       background: #f8fbff;
     }}
 
@@ -4510,49 +4509,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       display: none;
     }}
 
-    .manual-qa-save-target {{
-      display: grid;
-      gap: 2px;
-      align-content: center;
-      min-width: 0;
-      min-height: 0;
-      padding: 0;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 650;
-      line-height: 1.45;
-      overflow-wrap: anywhere;
-    }}
-
-    .manual-qa-save-target small {{
-      color: #5f7390;
-      font-size: 12px;
-      font-weight: 500;
-      max-width: none;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }}
-
-    .manual-qa-save-target strong {{
-      color: var(--ats-blue-dark);
-      font-weight: 760;
-    }}
-
-    .dataset-save-status {{
-      color: #0b2f5b;
-      font-size: 13px;
-      font-weight: 700;
-    }}
-
-    .save-target-title {{
-      color: #0b2f5b;
-      font-weight: 700;
-    }}
-
     .dataset-rows-table td {{
       vertical-align: middle;
     }}
@@ -4618,6 +4574,49 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       content: "";
     }}
 
+    .manual-qa-save-target {{
+      display: grid;
+      gap: 2px;
+      align-content: center;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }}
+
+    .manual-qa-save-target small {{
+      color: #5f7390;
+      font-size: 12px;
+      font-weight: 500;
+      max-width: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+
+    .manual-qa-save-target strong {{
+      color: var(--ats-blue-dark);
+      font-weight: 760;
+    }}
+
+    .dataset-save-status {{
+      color: #0b2f5b;
+      font-size: 13px;
+      font-weight: 700;
+    }}
+
+    .save-target-title {{
+      color: #0b2f5b;
+      font-weight: 700;
+    }}
+
     .dataset-preview-meta {{
       color: var(--muted);
       font-weight: 600;
@@ -4653,12 +4652,12 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     }}
 
     #datasets .records-table th {{
+      padding: 12px 16px;
+      color: #0b2f5b;
+      background: #f4f8fc;
       position: sticky;
       top: 0;
       z-index: 1;
-      padding: 12px 16px;
-      color: #0b2f5b;
-      background: #eef4f8;
       border-bottom-color: #d8e4f0;
       font-size: 12px;
       font-weight: 700;
@@ -4672,7 +4671,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     }}
 
     #datasets .records-table tbody tr:hover td {{
-      background: #f7fafc;
+      background: #fbfdff;
     }}
 
     .dataset-name-cell {{
@@ -5251,11 +5250,11 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
                     <span class="dataset-file-icon" aria-hidden="true">▣</span>
                     <span>
                       <strong id="datasetFileName">-</strong>
+                      <small id="datasetFileMeta">0 rows selected</small>
                     </span>
                   </div>
                   <div class="dataset-upload-cell">
                     <button id="openUploadDialog" type="button" class="qa-dataset-upload-button" data-i18n="uploadDataset">Upload dataset</button>
-                    <small>支持 .csv 格式，最大 50MB</small>
                   </div>
                 </div>
               </div>
@@ -5395,6 +5394,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     const manualQaDatasetSelect = document.getElementById("manualQaDatasetSelect");
     const manualQaResult = document.getElementById("manualQaResult");
     const manualQaButton = manualQaForm ? manualQaForm.querySelector("button[type='submit']") : null;
+    const manualQaSaveTarget = document.getElementById("manualQaSaveTarget");
     const uploadDialog = document.getElementById("uploadDialog");
     const openUploadDialog = document.getElementById("openUploadDialog");
     const closeUploadDialog = document.getElementById("closeUploadDialog");
@@ -5425,6 +5425,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     const runDatasetChoices = document.getElementById("runDatasetChoices");
     const manualQaDatasetPath = document.getElementById("manualQaDatasetPath");
     const datasetFileName = document.getElementById("datasetFileName");
+    const datasetFileMeta = document.getElementById("datasetFileMeta");
     const datasetSaveStatus = document.getElementById("datasetSaveStatus");
     const manualQaQuestionTextarea = document.getElementById("manualQaQuestionTextarea");
     const manualQaAnswerTextarea = document.getElementById("manualQaAnswerTextarea");
@@ -5971,7 +5972,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     const reportTranslations = {{
       de: {{"RAG Evaluation": "RAG-Auswertung"}},
       en: {{"RAG Evaluation": "RAG Evaluation"}},
-      zh: {{"RAG Evaluation": "RAG 璇勪及"}},
+      zh: {{"RAG Evaluation": "RAG 评估"}},
       ms: {{"RAG Evaluation": "Penilaian RAG"}}
     }};
 
@@ -6396,6 +6397,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     function updateDatasetFileSummary() {{
       const selectedPath = manualQaDatasetSelect?.value || "";
       if (datasetFileName) datasetFileName.textContent = selectedPath || "-";
+      if (datasetFileMeta) datasetFileMeta.textContent = selectedPath ? "Ready for Q&A save" : "0 rows selected";
     }}
 
     function compactCellText(value, maxLength = 72) {{

@@ -3109,7 +3109,7 @@ def test_do_post_bulk_qa_saves_selected_rows(tmp_path):
 
 def test_handle_manual_qa_rejects_missing_question_or_answer():
     handler = DummyUploadHandler()
-    body = json.dumps({"target_dataset": "data/qa_golden_2.csv", "question": "", "expected_answer": "Answer A"}).encode(
+    body = json.dumps({"target_dataset": "data/qa_golden.csv", "question": "", "expected_answer": "Answer A"}).encode(
         "utf-8"
     )
     handler.rfile = io.BytesIO(body)
