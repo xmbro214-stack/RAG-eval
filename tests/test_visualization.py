@@ -3,7 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rag_eval_pipeline.visualization import read_compare_inputs, render_compare_html, resolve_compare_run_root
+from rag_eval_pipeline.visualization import (
+    read_compare_inputs,
+    render_compare_html,
+    render_html,
+    resolve_compare_run_root,
+)
 
 
 HEADER = [
@@ -65,6 +70,36 @@ class TestVisualization(unittest.TestCase):
             self.assertIn("Baseline - Experiment", rendered)
             self.assertIn("Baseline recall", rendered)
             self.assertIn("Experiment recall", rendered)
+
+    def test_single_report_uses_light_ats_blue_theme(self):
+        rows = [dict(zip(HEADER, ROW))]
+
+        rendered = render_html(rows, "data/eval_result.csv")
+
+        self.assertIn("--bg: #f4f9fd;", rendered)
+        self.assertIn("--surface: #ffffff;", rendered)
+        self.assertIn("--ink: #0b2540;", rendered)
+        self.assertNotIn("--bg: #07111f;", rendered)
+
+    def test_single_report_collapses_source_files(self):
+        rows = [dict(zip(HEADER, ROW))]
+
+        rendered = render_html(rows, "data/a.csv | data/b.csv")
+
+        self.assertIn('<details class="source-details">', rendered)
+        self.assertIn("<summary>查看来源文件 (2)</summary>", rendered)
+        self.assertIn("<code>data/a.csv</code>", rendered)
+        self.assertIn("<code>data/b.csv</code>", rendered)
+        self.assertNotIn("<p>Source: data/a.csv | data/b.csv", rendered)
+
+    def test_single_report_header_omits_ats_mark(self):
+        rows = [dict(zip(HEADER, ROW))]
+
+        rendered = render_html(rows, "data/eval_result.csv")
+
+        self.assertIn("<h1>RAG Evaluation</h1>", rendered)
+        self.assertNotIn("brand-mark", rendered)
+        self.assertNotIn("AT&S logo", rendered)
 
     def test_compare_input_root_accepts_data_directory(self):
         root = Path("/tmp/project")

@@ -50,6 +50,323 @@ DATASET_LABELS = dict(DATASETS)
 
 DEFAULT_PIPELINE_RUN = "ragflow_grid"
 
+SINGLE_REPORT_CSS = """
+:root {
+  --bg: #f4f9fd;
+  --surface: #ffffff;
+  --surface-strong: #f8fbff;
+  --surface-soft: #eef6fb;
+  --ink: #0b2540;
+  --muted: #526b86;
+  --line: #bfd2e5;
+  --line-strong: #00a7c8;
+  --green: #20b86b;
+  --yellow: #ffd166;
+  --red: #c93a2d;
+  --blue: #004b93;
+  --blue-soft: #e7f3fb;
+  --blue-deep: #dcecf8;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  letter-spacing: 0;
+}
+header {
+  padding: 22px 32px 18px;
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+}
+.brand-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+.brand-lockup {
+  display: contents;
+  min-width: 0;
+}
+.report-title-block {
+  min-width: 0;
+}
+header h1 { margin: 0; font-size: 24px; font-weight: 760; color: var(--blue-dark); }
+header p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.source-summary {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.source-details {
+  flex: 0 1 auto;
+  max-width: 840px;
+}
+.source-details summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: var(--blue-dark);
+  background: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+.source-details summary::-webkit-details-marker { display: none; }
+.source-details summary::after {
+  content: "+";
+  margin-left: 10px;
+  font-weight: 800;
+}
+.source-details[open] summary::after { content: "-"; }
+.source-list {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+.source-list code {
+  color: var(--ink);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+main { padding: 24px 32px 40px; }
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.summary-card, .panel, .run-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 16px 36px rgba(0, 47, 95, .12);
+}
+.summary-card {
+  padding: 16px;
+  border-top: 3px solid var(--line-strong);
+}
+.summary-card span, .eyebrow {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+.summary-card strong { display: block; margin: 6px 0; font-size: 28px; }
+.summary-card small { color: var(--muted); }
+.panel { padding: 18px; margin-bottom: 24px; overflow-x: auto; }
+.panel h2 { margin: 0 0 14px; font-size: 18px; font-weight: 650; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 10px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--blue); font-weight: 600; background: var(--blue-soft); }
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+select, input {
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--blue-deep);
+  color: var(--ink);
+  min-width: 180px;
+  outline: none;
+}
+select:focus, input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0, 167, 200, .18); }
+input::placeholder { color: #71839f; }
+.run-card { padding: 18px; margin-bottom: 16px; }
+.run-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.run-title h3 { margin: 4px 0 6px; font-size: 18px; font-weight: 650; }
+.run-title p { margin: 0; color: var(--muted); }
+.pill {
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 6px 10px;
+  white-space: nowrap;
+  background: #e6f8fb;
+  color: var(--blue);
+}
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.metric-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-soft);
+}
+.metric-row.featured { border-color: var(--line-strong); background: #e6f8fb; }
+.metric-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.bar { height: 8px; background: #d5e4f1; border-radius: 999px; overflow: hidden; margin-top: 8px; }
+.bar span { display: block; height: 100%; border-radius: inherit; }
+.score-good { color: var(--green); }
+.score-medium { color: var(--yellow); }
+.score-low { color: var(--red); }
+.score-missing { color: var(--muted); }
+.bar .score-good { background: var(--green); }
+.bar .score-medium { background: var(--yellow); }
+.bar .score-low { background: var(--red); }
+.bar .score-missing { background: #9aabc0; }
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.preview-grid section { border-left: 3px solid var(--line-strong); padding-left: 12px; }
+.preview-grid h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.preview-grid p { margin: 0; line-height: 1.45; }
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 10px;
+}
+details {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-strong);
+}
+summary { cursor: pointer; font-weight: 600; color: var(--blue); }
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.hidden { display: none; }
+@media (max-width: 720px) {
+  header, main { padding-left: 16px; padding-right: 16px; }
+  .brand-row { display: grid; gap: 12px; }
+  .brand-lockup { display: block; }
+  .run-title { display: block; }
+  .pill { display: inline-block; margin-top: 10px; }
+}
+"""
+
+COMPARE_REPORT_CSS = SINGLE_REPORT_CSS + """
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+}
+.selector-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.page-section.hidden, .hidden { display: none; }
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.compare-card, .compare-detail, .side-run {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .22);
+}
+.compare-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+.compare-card.highlight { border-color: var(--line-strong); background: rgba(99, 197, 255, .09); }
+.compare-card strong { display: block; margin: 6px 0; font-size: 30px; }
+.compare-card small, .eyebrow { color: var(--muted); font-size: 12px; }
+.card-metrics {
+  display: grid;
+  gap: 6px;
+  min-width: 132px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: minmax(420px, .8fr) minmax(620px, 1.2fr);
+  gap: 18px;
+}
+.metric-group {
+  display: inline-block;
+  min-width: 64px;
+  margin-right: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.compare-detail { padding: 16px; margin-bottom: 14px; }
+.detail-head, .side-title, .metric-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.detail-head h3 { margin: 4px 0 14px; font-size: 18px; font-weight: 650; }
+.side-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 12px;
+}
+.side-run { padding: 14px; }
+.side-run h4 { margin: 0 0 10px; font-size: 16px; }
+.side-run.missing { color: var(--muted); }
+.metric-grid.compact { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.delta-up { color: var(--green); }
+.delta-down { color: var(--red); }
+.delta-flat, .delta-missing { color: var(--muted); }
+.answer-preview {
+  border-left: 3px solid var(--line-strong);
+  padding-left: 12px;
+  margin: 10px 0;
+}
+.answer-preview span { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+.answer-preview p { margin: 5px 0 0; line-height: 1.45; }
+@media (max-width: 980px) {
+  header { display: block; }
+  .selector-row { justify-content: flex-start; margin-top: 14px; }
+  .two-col, .side-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .compare-card { display: block; }
+  .card-metrics { margin-top: 10px; }
+}
+"""
+
 
 def read_rows(path: str) -> list[dict[str, str]]:
     with open(path, newline="", encoding="utf-8-sig") as f:
@@ -270,7 +587,7 @@ def render_detail(row: dict[str, str], row_number: int) -> str:
         <div class="run-title">
           <div>
             <span class="eyebrow">Run {row_number}</span>
-            <h3>{query_id} · run {query_run}</h3>
+            <h3>{query_id} | run {query_run}</h3>
             <p>{query}</p>
           </div>
           <strong class="pill {score_class(recall_avg)}">recall {fmt(recall_avg)}</strong>
@@ -291,6 +608,18 @@ def render_detail(row: dict[str, str], row_number: int) -> str:
     """
 
 
+def render_source_details(input_csv: str) -> str:
+    sources = [source.strip() for source in str(input_csv).split("|") if source.strip()]
+    source_count = len(sources)
+    summary_label = "查看来源文件"
+    source_items = "\n".join(f"<code>{html.escape(source)}</code>" for source in sources)
+    return f"""
+          <details class="source-details">
+            <summary>{summary_label} ({source_count})</summary>
+            <div class="source-list">{source_items}</div>
+          </details>"""
+
+
 def render_html(rows: list[dict[str, str]], input_csv: str) -> str:
     summary = summarize_overall(rows)
     query_summaries = summarize_by_query(rows)
@@ -299,164 +628,38 @@ def render_html(rows: list[dict[str, str]], input_csv: str) -> str:
         f"<option value=\"{html.escape(item['query_id'].lower())}\">{html.escape(item['query_id'])}</option>"
         for item in query_summaries
     )
+    source_details = render_source_details(input_csv)
 
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Local Eval Results Viewer</title>
-  <style>
-    :root {{
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --ink: #17202a;
-      --muted: #667085;
-      --line: #d9dee7;
-      --green: #238636;
-      --yellow: #b7791f;
-      --red: #c2410c;
-      --blue: #1f5eff;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-    }}
-    header {{
-      padding: 28px 32px 20px;
-      border-bottom: 1px solid var(--line);
-      background: var(--panel);
-    }}
-    header h1 {{ margin: 0 0 8px; font-size: 28px; }}
-    header p {{ margin: 0; color: var(--muted); }}
-    main {{ padding: 24px 32px 40px; }}
-    .summary-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-      margin-bottom: 24px;
-    }}
-    .summary-card, .panel, .run-card {{
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-    }}
-    .summary-card {{ padding: 16px; }}
-    .summary-card span, .eyebrow {{ color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }}
-    .summary-card strong {{ display: block; margin: 6px 0; font-size: 28px; }}
-    .summary-card small {{ color: var(--muted); }}
-    .panel {{ padding: 18px; margin-bottom: 24px; overflow-x: auto; }}
-    .panel h2 {{ margin: 0 0 14px; font-size: 18px; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
-    th, td {{ padding: 10px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }}
-    th {{ color: var(--muted); font-weight: 600; background: #fafbfc; }}
-    .toolbar {{
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }}
-    select, input {{
-      height: 36px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0 10px;
-      background: white;
-      min-width: 180px;
-    }}
-    .run-card {{ padding: 18px; margin-bottom: 16px; }}
-    .run-title {{
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: flex-start;
-      margin-bottom: 14px;
-    }}
-    .run-title h3 {{ margin: 4px 0 6px; font-size: 18px; }}
-    .run-title p {{ margin: 0; color: var(--muted); }}
-    .pill {{
-      border-radius: 999px;
-      padding: 6px 10px;
-      white-space: nowrap;
-      background: #eef2ff;
-    }}
-    .metric-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-      gap: 12px;
-      margin-bottom: 16px;
-    }}
-    .metric-row {{
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px;
-    }}
-    .metric-row.featured {{ border-color: #9eb4ff; background: #f5f7ff; }}
-    .metric-head {{ display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }}
-    .bar {{ height: 8px; background: #edf0f5; border-radius: 999px; overflow: hidden; margin-top: 8px; }}
-    .bar span {{ display: block; height: 100%; border-radius: inherit; }}
-    .score-good, .bar .score-good {{ color: var(--green); background: #2da44e; }}
-    .score-medium, .bar .score-medium {{ color: var(--yellow); background: #d29922; }}
-    .score-low, .bar .score-low {{ color: var(--red); background: #f97316; }}
-    .score-missing, .bar .score-missing {{ color: var(--muted); background: #c7ced8; }}
-    .preview-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 12px;
-      margin-bottom: 14px;
-    }}
-    .preview-grid section {{
-      border-left: 3px solid var(--line);
-      padding-left: 12px;
-    }}
-    .preview-grid h4 {{ margin: 0 0 6px; font-size: 13px; color: var(--muted); }}
-    .preview-grid p {{ margin: 0; line-height: 1.45; }}
-    .details-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 10px;
-    }}
-    details {{
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px 12px;
-      background: #fbfcfe;
-    }}
-    summary {{ cursor: pointer; font-weight: 600; }}
-    pre {{
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 12px;
-      line-height: 1.45;
-      color: #243447;
-    }}
-    .hidden {{ display: none; }}
-    @media (max-width: 720px) {{
-      header, main {{ padding-left: 16px; padding-right: 16px; }}
-      .run-title {{ display: block; }}
-      .pill {{ display: inline-block; margin-top: 10px; }}
-    }}
-  </style>
+  <title>AT&S RAG Evaluation</title>
+  <style>{SINGLE_REPORT_CSS}</style>
 </head>
 <body>
   <header>
-    <h1>Local Eval Results Viewer</h1>
-    <p>Source: {html.escape(input_csv)} · self-contained report for RAG evaluation metrics</p>
+    <div class="brand-row">
+      <div class="brand-lockup">
+        <div class="report-title-block">
+          <h1>RAG Evaluation</h1>
+          <p class="source-summary">Self-contained report for RAG evaluation metrics.</p>
+        </div>
+        {source_details}
+      </div>
+    </div>
   </header>
   <main>
     <section class="summary-grid">
       {render_summary_cards(summary, len(rows), len(query_summaries))}
     </section>
     <section class="panel">
-      <h2>按 Query 聚合</h2>
+      <h2>Query Summary</h2>
       {render_query_table(query_summaries)}
     </section>
     <section class="panel">
-      <h2>Run 明细</h2>
+      <h2>Run Details</h2>
       <div class="toolbar">
         <select id="queryFilter">
           <option value="">All query_id</option>
@@ -464,7 +667,7 @@ def render_html(rows: list[dict[str, str]], input_csv: str) -> str:
         </select>
         <select id="bandFilter">
           <option value="">All recall bands</option>
-          <option value="score-good">Good ≥ 0.8</option>
+          <option value="score-good">Good >= 0.8</option>
           <option value="score-medium">Medium 0.5-0.8</option>
           <option value="score-low">Low &lt; 0.5</option>
         </select>
@@ -893,195 +1096,15 @@ def render_compare_html(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Eval Results Comparison</title>
-  <style>
-    :root {{
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --ink: #17202a;
-      --muted: #667085;
-      --line: #d9dee7;
-      --green: #238636;
-      --yellow: #b7791f;
-      --red: #c2410c;
-      --blue: #1f5eff;
-      --purple: #7c3aed;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-    }}
-    header {{
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      display: flex;
-      justify-content: space-between;
-      gap: 18px;
-      align-items: center;
-      padding: 22px 32px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255, 255, 255, .96);
-      backdrop-filter: blur(10px);
-    }}
-    header h1 {{ margin: 0 0 6px; font-size: 26px; }}
-    header p {{ margin: 0; color: var(--muted); }}
-    main {{ padding: 24px 32px 42px; }}
-    select, input {{
-      height: 38px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0 10px;
-      background: white;
-      min-width: 180px;
-    }}
-    .selector-row {{
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }}
-    .page-section.hidden, .hidden {{ display: none; }}
-    .compare-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 12px;
-      margin-bottom: 20px;
-    }}
-    .compare-card, .panel, .compare-detail, .side-run {{
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-    }}
-    .compare-card {{
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 16px;
-    }}
-    .compare-card.highlight {{ border-color: #b8c7ff; background: #f5f7ff; }}
-    .compare-card strong {{ display: block; margin: 6px 0; font-size: 30px; }}
-    .compare-card small, .eyebrow {{ color: var(--muted); font-size: 12px; }}
-    .eyebrow {{ text-transform: uppercase; letter-spacing: .04em; }}
-    .card-metrics {{
-      display: grid;
-      gap: 6px;
-      min-width: 132px;
-      color: var(--muted);
-      font-size: 13px;
-    }}
-    .panel {{ padding: 18px; margin-bottom: 20px; overflow-x: auto; }}
-    .panel h2 {{ margin: 0 0 14px; font-size: 18px; }}
-    .two-col {{
-      display: grid;
-      grid-template-columns: minmax(420px, .8fr) minmax(620px, 1.2fr);
-      gap: 18px;
-    }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
-    th, td {{ padding: 10px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }}
-    th {{ color: var(--muted); font-weight: 600; background: #fafbfc; }}
-    .metric-group {{
-      display: inline-block;
-      min-width: 64px;
-      margin-right: 8px;
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-    }}
-    .toolbar {{
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }}
-    .compare-detail {{ padding: 16px; margin-bottom: 14px; }}
-    .detail-head, .side-title, .metric-head {{
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: flex-start;
-    }}
-    .detail-head h3 {{ margin: 4px 0 14px; font-size: 18px; }}
-    .side-grid {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(280px, 1fr));
-      gap: 12px;
-    }}
-    .side-run {{ padding: 14px; }}
-    .side-run h4 {{ margin: 0 0 10px; font-size: 16px; }}
-    .side-run.missing {{ color: var(--muted); }}
-    .pill {{
-      border-radius: 999px;
-      padding: 5px 9px;
-      white-space: nowrap;
-      background: #eef2ff;
-    }}
-    .metric-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 10px;
-      margin-bottom: 12px;
-    }}
-    .metric-grid.compact {{ grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }}
-    .metric-row {{
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 9px;
-    }}
-    .metric-row.featured {{ border-color: #9eb4ff; background: #f5f7ff; }}
-    .metric-head {{ font-size: 13px; }}
-    .bar {{ height: 8px; background: #edf0f5; border-radius: 999px; overflow: hidden; margin-top: 8px; }}
-    .bar span {{ display: block; height: 100%; border-radius: inherit; }}
-    .score-good, .bar .score-good {{ color: var(--green); background: #2da44e; }}
-    .score-medium, .bar .score-medium {{ color: var(--yellow); background: #d29922; }}
-    .score-low, .bar .score-low {{ color: var(--red); background: #f97316; }}
-    .score-missing, .bar .score-missing {{ color: var(--muted); background: #c7ced8; }}
-    .delta-up {{ color: var(--green); }}
-    .delta-down {{ color: var(--red); }}
-    .delta-flat, .delta-missing {{ color: var(--muted); }}
-    .answer-preview {{
-      border-left: 3px solid var(--line);
-      padding-left: 12px;
-      margin: 10px 0;
-    }}
-    .answer-preview span {{ color: var(--muted); font-size: 12px; text-transform: uppercase; }}
-    .answer-preview p {{ margin: 5px 0 0; line-height: 1.45; }}
-    details {{
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 9px 11px;
-      background: #fbfcfe;
-      margin-top: 8px;
-    }}
-    summary {{ cursor: pointer; font-weight: 600; }}
-    pre {{
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 12px;
-      line-height: 1.45;
-      color: #243447;
-    }}
-    @media (max-width: 980px) {{
-      header {{ display: block; }}
-      header select {{ margin-top: 12px; }}
-      .two-col, .side-grid {{ grid-template-columns: 1fr; }}
-    }}
-    @media (max-width: 720px) {{
-      header, main {{ padding-left: 16px; padding-right: 16px; }}
-      .compare-card {{ display: block; }}
-      .card-metrics {{ margin-top: 10px; }}
-    }}
-  </style>
+  <style>{COMPARE_REPORT_CSS}</style>
 </head>
 <body>
   <header>
-    <div>
-      <h1>Eval Results Comparison</h1>
-      <p>Compare Custom and TRD chunking across page-size and similarity settings.</p>
+    <div class="brand-lockup">
+      <div>
+        <h1>Eval Results Comparison</h1>
+        <p>Compare Custom and TRD chunking across page-size and similarity settings.</p>
+      </div>
     </div>
     <div class="selector-row">
       <select id="pageSizeSelect" aria-label="Select page-size">

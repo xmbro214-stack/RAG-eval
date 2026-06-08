@@ -12,6 +12,7 @@ stable output folder, and records progress in a manifest for resumable runs.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import logging
 import os
@@ -38,6 +39,10 @@ SECRET_FLAGS = {
     "--chat-api-key",
     "--embedding-api-key",
 }
+
+
+class PipelineCancelled(RuntimeError):
+    """Raised when a running pipeline is asked to stop between tasks."""
 
 
 @dataclass(frozen=True)
@@ -235,6 +240,8 @@ def build_evaluation_command(config: dict[str, Any], task: PipelineTask) -> list
         "--max-workers": evaluation.get("max_workers"),
         "--timeout": evaluation.get("timeout"),
         "--retries": evaluation.get("retries"),
+        "--max-tokens": evaluation.get("max_tokens"),
+        "--chat-extra-body-json": evaluation.get("chat_extra_body_json"),
         "--log-level": log_level,
     }
     for flag, value in optional_flags.items():
@@ -249,6 +256,61 @@ def resolve_repo_path(value: str | Path) -> Path:
 
 def should_overwrite(config: dict[str, Any], cli_overwrite: bool) -> bool:
     return cli_overwrite or bool((config.get("output") or {}).get("overwrite", False))
+
+
+def generated_answers_has_errors(path: Path) -> bool:
+    try:
+        with path.open(newline="", encoding="utf-8-sig") as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                if (row.get("generated_answer") or "").strip() == "API_ERROR":
+                    return True
+                if (row.get("passage_id") or "").strip().upper() == "ERROR":
+                    return True
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return True
+    return False
+
+
+def generated_answers_error_details(path: Path, limit: int = 3) -> list[str]:
+    details: list[str] = []
+    try:
+        with path.open(newline="", encoding="utf-8-sig") as csv_file:
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                has_error_answer = (row.get("generated_answer") or "").strip() == "API_ERROR"
+                has_error_passage = (row.get("passage_id") or "").strip().upper() == "ERROR"
+                if not (has_error_answer or has_error_passage):
+                    continue
+                query_id = (row.get("query_id") or "unknown_query").strip()
+                detail = (row.get("passage") or row.get("generated_answer") or "").strip()
+                detail = " ".join(detail.split())
+                if len(detail) > 240:
+                    detail = f"{detail[:237]}..."
+                details.append(f"{query_id}: {detail}" if detail else query_id)
+                if len(details) >= limit:
+                    break
+    except (OSError, UnicodeDecodeError, csv.Error) as exc:
+        details.append(f"unable to read generated answers: {exc}")
+    return details
+
+
+def generated_answers_error_message(path: Path) -> str:
+    message = "Generated answers contain API_ERROR rows; check retrieval or LLM generation service."
+    details = generated_answers_error_details(path)
+    if details:
+        return f"{message} Details: {'; '.join(details)}"
+    return message
+
+
+def command_timeout_seconds(config: dict[str, Any]) -> int | None:
+    value = (config.get("output") or {}).get("command_timeout_seconds")
+    if value in (None, ""):
+        return None
+    timeout = int(value)
+    if timeout <= 0:
+        return None
+    return timeout
 
 
 def manifest_entry(task: PipelineTask) -> dict[str, Any]:
@@ -295,7 +357,13 @@ def redacted_command(command: list[str]) -> str:
     return " ".join(redacted)
 
 
-def run_command(command: list[str], dry_run: bool) -> float:
+def run_command(
+    command: list[str],
+    dry_run: bool,
+    *,
+    timeout_seconds: int | None = None,
+    cancel_check=None,
+) -> float:
     started_at = time.perf_counter()
     command_text = "$ " + redacted_command(command)
     if dry_run:
@@ -303,11 +371,37 @@ def run_command(command: list[str], dry_run: bool) -> float:
     else:
         LOGGER.debug(command_text)
     if not dry_run:
-        subprocess.run(command, cwd=ROOT, check=True)
+        process = subprocess.Popen(command, cwd=ROOT)
+        while True:
+            try:
+                process.wait(timeout=0.25)
+                break
+            except subprocess.TimeoutExpired:
+                if timeout_seconds is not None and time.perf_counter() - started_at > timeout_seconds:
+                    process.kill()
+                    process.wait()
+                    raise subprocess.TimeoutExpired(command, timeout_seconds)
+                if cancel_check is not None and cancel_check():
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                    raise PipelineCancelled("Pipeline cancelled by user.")
+        if process.returncode:
+            raise subprocess.CalledProcessError(process.returncode, command)
     return time.perf_counter() - started_at
 
 
-def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite: bool) -> list[dict[str, Any]]:
+def run_pipeline(
+    config: dict[str, Any],
+    *,
+    stage: str,
+    dry_run: bool,
+    overwrite: bool,
+    cancel_check=None,
+) -> list[dict[str, Any]]:
     if stage not in VALID_STAGES:
         raise ValueError(f"Invalid stage {stage!r}; expected one of {', '.join(VALID_STAGES)}")
 
@@ -320,6 +414,7 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
         raise ValueError("No pipeline tasks were generated from the config.")
 
     do_overwrite = should_overwrite(config, overwrite)
+    command_timeout = command_timeout_seconds(config)
     entries: list[dict[str, Any]] = []
     manifest_path = output_root(config) / "manifest.json"
     log(
@@ -328,7 +423,13 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
         f"tasks={len(tasks)}, output_root={output_root(config)}"
     )
 
+    def raise_if_cancelled() -> None:
+        if cancel_check is not None and cancel_check():
+            log("Pipeline cancellation requested; stopping before next step.")
+            raise PipelineCancelled("Pipeline cancelled by user.")
+
     for index, task in enumerate(tasks, start=1):
+        raise_if_cancelled()
         log(
             f"[{index}/{len(tasks)}] Task dataset={task.dataset_name} "
             f"(id={task.dataset_id}), page_size={task.page_size}, "
@@ -343,15 +444,28 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
         entry["evaluation_seconds"] = None
 
         if stage in ("all", "generate"):
-            if task.generated_answers_csv.exists() and not do_overwrite:
+            existing_generated_has_errors = (
+                task.generated_answers_csv.exists()
+                and generated_answers_has_errors(task.generated_answers_csv)
+            )
+            if task.generated_answers_csv.exists() and not do_overwrite and not existing_generated_has_errors:
                 entry["generation_status"] = "skipped_existing"
                 log(f"[{index}/{len(tasks)}] Generate skipped: existing {task.generated_answers_csv}")
             else:
                 command = build_generation_command(config, task)
                 entry["generation_command"] = command
                 try:
+                    if existing_generated_has_errors and not do_overwrite:
+                        log(f"[{index}/{len(tasks)}] Generate retry: existing output contains API_ERROR rows")
                     log(f"[{index}/{len(tasks)}] Generate start -> {task.generated_answers_csv}")
-                    entry["generation_seconds"] = run_command(command, dry_run)
+                    entry["generation_seconds"] = run_command(
+                        command,
+                        dry_run,
+                        timeout_seconds=command_timeout,
+                        cancel_check=cancel_check,
+                    )
+                    if not dry_run and generated_answers_has_errors(task.generated_answers_csv):
+                        raise RuntimeError(generated_answers_error_message(task.generated_answers_csv))
                     entry["generation_status"] = "dry_run" if dry_run else "completed"
                     log(
                         f"[{index}/{len(tasks)}] Generate {entry['generation_status']} "
@@ -364,8 +478,23 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
                     entries.append(entry)
                     write_manifest(manifest_path, entries)
                     raise
+                except RuntimeError as exc:
+                    entry["generation_status"] = "failed"
+                    entry["generation_error"] = str(exc)
+                    LOGGER.error(f"[{index}/{len(tasks)}] Generate failed: {exc}")
+                    entries.append(entry)
+                    write_manifest(manifest_path, entries)
+                    raise
+                except subprocess.TimeoutExpired as exc:
+                    entry["generation_status"] = "failed"
+                    entry["generation_error"] = f"Command timed out after {exc.timeout} seconds"
+                    LOGGER.error(f"[{index}/{len(tasks)}] Generate timed out after {exc.timeout} seconds")
+                    entries.append(entry)
+                    write_manifest(manifest_path, entries)
+                    raise
 
         if stage in ("all", "eval"):
+            raise_if_cancelled()
             if not dry_run and not task.generated_answers_csv.exists():
                 entry["evaluation_status"] = "missing_generated_answers"
                 log(f"[{index}/{len(tasks)}] Eval skipped: missing {task.generated_answers_csv}")
@@ -377,7 +506,12 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
                 entry["evaluation_command"] = command
                 try:
                     log(f"[{index}/{len(tasks)}] Eval start -> {task.eval_result_csv}")
-                    entry["evaluation_seconds"] = run_command(command, dry_run)
+                    entry["evaluation_seconds"] = run_command(
+                        command,
+                        dry_run,
+                        timeout_seconds=command_timeout,
+                        cancel_check=cancel_check,
+                    )
                     entry["evaluation_status"] = "dry_run" if dry_run else "completed"
                     log(
                         f"[{index}/{len(tasks)}] Eval {entry['evaluation_status']} "
@@ -387,6 +521,13 @@ def run_pipeline(config: dict[str, Any], *, stage: str, dry_run: bool, overwrite
                     entry["evaluation_status"] = "failed"
                     entry["evaluation_error"] = str(exc)
                     LOGGER.error(f"[{index}/{len(tasks)}] Eval failed: {exc}")
+                    entries.append(entry)
+                    write_manifest(manifest_path, entries)
+                    raise
+                except subprocess.TimeoutExpired as exc:
+                    entry["evaluation_status"] = "failed"
+                    entry["evaluation_error"] = f"Command timed out after {exc.timeout} seconds"
+                    LOGGER.error(f"[{index}/{len(tasks)}] Eval timed out after {exc.timeout} seconds")
                     entries.append(entry)
                     write_manifest(manifest_path, entries)
                     raise

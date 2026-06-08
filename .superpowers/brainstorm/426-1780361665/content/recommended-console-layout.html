@@ -1,0 +1,75 @@
+<h2>Recommended Structure</h2>
+<p class="subtitle">A focused console layout for evaluating RAG runs without losing sight of long-running jobs.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Recommended: Left navigation + persistent job rail</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:190px minmax(420px,1fr) 300px;min-height:520px;border:1px solid #d7dfeb;border-radius:8px;overflow:hidden;background:#fff;">
+      <aside style="background:#08365f;color:white;padding:18px 12px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font-weight:800;margin-bottom:16px;letter-spacing:.02em;">AT&amp;S RAG Eval</div>
+        <div style="background:#0f5c96;border-radius:6px;padding:10px;">Overview</div>
+        <div style="border-radius:6px;padding:10px;opacity:.88;">Reports</div>
+        <div style="border-radius:6px;padding:10px;opacity:.88;">Evaluation Runs</div>
+        <div style="border-radius:6px;padding:10px;opacity:.88;">Run Evaluation</div>
+        <div style="border-radius:6px;padding:10px;opacity:.88;">Datasets</div>
+        <div style="margin-top:auto;border-top:1px solid rgba(255,255,255,.22);padding-top:12px;font-size:12px;opacity:.75;">Language / Settings</div>
+      </aside>
+
+      <main style="padding:20px;background:#f6f9fc;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;">
+          <div>
+            <strong style="font-size:18px;">Overview</strong>
+            <p style="margin:4px 0 0;color:#5f6f82;font-size:12px;">Start from current status, then drill into reports or run details.</p>
+          </div>
+          <button class="mock-button">Run standard eval</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;">
+          <div class="placeholder" style="height:74px;">Latest report</div>
+          <div class="placeholder" style="height:74px;">Last run score</div>
+          <div class="placeholder" style="height:74px;">Active job</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:12px;">
+          <div class="placeholder" style="height:250px;">Recent evaluation runs table</div>
+          <div class="placeholder" style="height:250px;">Selected report preview / summary</div>
+        </div>
+      </main>
+
+      <aside style="padding:18px;border-left:1px solid #d7dfeb;background:#fff;display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <strong>Background job</strong>
+          <p style="margin:4px 0 0;color:#5f6f82;font-size:12px;">Always visible while work continues.</p>
+        </div>
+        <div style="height:10px;border-radius:999px;background:#dce7f2;overflow:hidden;">
+          <div style="width:63%;height:100%;background:#0f7fb9;"></div>
+        </div>
+        <div style="font-size:12px;color:#5f6f82;">5 / 8 tasks complete · running standard eval</div>
+        <div class="placeholder" style="height:86px;">current task: trd / ps5_sim0p2</div>
+        <div class="placeholder" style="height:190px;">log tail</div>
+        <button class="mock-button">Open job details</button>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Why this structure</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Strengths</h4>
+      <ul>
+        <li>Reports, run records, and launching evaluations are separate enough to stay readable.</li>
+        <li>Long-running job progress is never hidden behind a tab.</li>
+        <li>Datasets remain available, but do not dominate the main reporting workflow.</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Trade-off</h4>
+      <ul>
+        <li>The page becomes a console, so we should keep styling restrained and dense.</li>
+        <li>Mobile should collapse the job rail below the active section.</li>
+      </ul>
+    </div>
+  </div>
+</div>

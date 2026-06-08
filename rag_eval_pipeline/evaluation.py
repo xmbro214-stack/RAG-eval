@@ -104,6 +104,8 @@ class OpenAICompatibleClient:
         embedding_model: str | None = None,
         timeout: int = 120,
         retries: int = 2,
+        max_tokens: int | None = None,
+        chat_extra_body: dict[str, Any] | None = None,
     ) -> None:
         self.chat_url = chat_completions_url(chat_base_url)
         self.chat_api_key = chat_api_key
@@ -113,10 +115,13 @@ class OpenAICompatibleClient:
         self.embedding_model = embedding_model
         self.timeout = timeout
         self.retries = retries
+        self.max_tokens = max_tokens
+        self.chat_extra_body = chat_extra_body or {}
         self.input_tokens = 0
         self.output_tokens = 0
 
     def chat(self, prompt: str, max_tokens: int | None = None) -> str:
+        effective_max_tokens = max_tokens if max_tokens is not None else self.max_tokens
         payload: dict[str, Any] = {
             "model": self.chat_model,
             "messages": [
@@ -128,12 +133,13 @@ class OpenAICompatibleClient:
             ],
             "temperature": 0,
         }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
+        payload.update(self.chat_extra_body)
+        if effective_max_tokens is not None:
+            payload["max_tokens"] = effective_max_tokens
 
         LOGGER.debug(
             "Chat judge request: "
-            f"url={self.chat_url}, model={self.chat_model}, max_tokens={max_tokens}, "
+            f"url={self.chat_url}, model={self.chat_model}, max_tokens={effective_max_tokens}, "
             f"prompt_chars={len(prompt)}, prompt_sha256={sha256_short(prompt)}"
         )
         data = self._post_json(self.chat_url, self.chat_api_key, payload)
@@ -347,7 +353,7 @@ Return only one integer: 0, 1, 2, or 3.
 {passage}
 </passage>
 """
-        raw = client.chat(prompt, max_tokens=8)
+        raw = client.chat(prompt)
         match = re.search(r"[0-3]", raw)
         if not match:
             raise ValueError(f"Could not parse UMBRELA score from: {raw}")
@@ -764,7 +770,21 @@ def build_client(args: argparse.Namespace) -> OpenAICompatibleClient:
         embedding_model=args.embedding_model,
         timeout=args.timeout,
         retries=args.retries,
+        max_tokens=args.max_tokens,
+        chat_extra_body=parse_json_object_arg(args.chat_extra_body_json, "--chat-extra-body-json"),
     )
+
+
+def parse_json_object_arg(value: str | None, arg_name: str) -> dict[str, Any] | None:
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{arg_name} must be valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{arg_name} must be a JSON object")
+    return parsed
 
 
 def evaluate_run(
@@ -993,6 +1013,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--k-values", default="1,3,5")
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--retries", type=int, default=2)
+    parser.add_argument("--max-tokens", type=int, help="Maximum chat completion tokens per judge request.")
+    parser.add_argument("--chat-extra-body-json", help="Extra JSON object merged into each chat completion request.")
     parser.add_argument("--max-workers", type=int, default=1, help="Parallel evaluation workers. Use 1 for sequential runs.")
     parser.add_argument("--log-level", default=os.getenv("RAG_EVAL_LOG_LEVEL", "INFO"), help="Logging level: DEBUG, INFO, WARNING, ERROR.")
     args = parser.parse_args()

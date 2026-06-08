@@ -1,0 +1,44 @@
+queries_csv: data/qa_golden_smoke.csv
+golden_csv: data/qa_golden_smoke.csv
+
+output:
+  root: data/eval_runs
+  run_name: local_smoke
+  overwrite: true
+
+logging:
+  level: INFO
+
+datasets:
+  - id: "local_mock"
+    name: mock
+
+grid:
+  page_sizes: [3]
+  similarity_thresholds: [0.1]
+
+generation:
+  retrieval_url: "http://localhost:9380/api/v1/retrieval"
+  top_k: 16
+  rerank_id: ""
+  vector_similarity_weight: 0.3
+  repeat_query: 1
+  max_workers: 1
+  timeout: 120
+  retries: 2
+  llm_base_url: "http://localhost:8000/v1"
+  llm_api_key: "EMPTY"
+  llm_model: "mock-chat"
+  max_tokens: 2048
+
+evaluation:
+  chat_base_url: "http://localhost:8000/v1"
+  chat_api_key: "EMPTY"
+  chat_model: "mock-chat"
+  embedding_base_url: "http://localhost:8000/v1"
+  embedding_api_key: "EMPTY"
+  embedding_model: "mock-embedding"
+  k_values: "1"
+  max_workers: 1
+  timeout: 120
+  retries: 2

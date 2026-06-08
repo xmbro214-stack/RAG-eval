@@ -71,3 +71,6 @@ query_6,Where is the CU64 M1 defect originating from?,"Defect information:
 CU64 M1: Fixed unit and fixed location crush of bad copper adhesion, Trace or pad be crushed by FM on LXP stage
 
 The CU64 M1 defect is caused by foreign material (FM) on the LXP tool work stage, resulting in dry film crushing or scratching at fixed locations. The FM originates from the environment and re-adheres to the work stage. To mitigate this issue, it is critical to control environmental FM levels to reduce the risk of recurrence."""
+query_7,什么是SM94,SM94 is a solder resist surface dent or depression [1].
+query_8,什么是CU64 M1？,SM94 is a solder resist surface dent or depression [1].
+query_9,What changed?,Recall improved.
