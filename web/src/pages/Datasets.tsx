@@ -217,9 +217,13 @@ export function Datasets() {
               onClick={() => void selectDataset(dataset)}
               type="button"
             >
-              <strong>{dataset.name}</strong>
-              <span>{dataset.path}</span>
-              <span>Rows: {dataset.rows ?? "-"}</span>
+              <span className="dataset-row-main">
+                <strong className="dataset-row-name">{dataset.name}</strong>
+                <span className="dataset-row-count">Rows: {dataset.rows ?? "-"}</span>
+              </span>
+              <span className="dataset-row-path" title={dataset.path}>
+                {dataset.path}
+              </span>
             </button>
           ))}
           {!loadingDatasets && datasets.length === 0 ? <p>No datasets found.</p> : null}

@@ -213,14 +213,63 @@ textarea {
 
 .datasets-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 480px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+
+.datasets-layout .data-table {
+  min-width: 0;
+}
+
+.datasets-layout .data-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+  min-height: 58px;
+  overflow: hidden;
 }
 
 .data-row.active {
   border-color: #005bac;
   background: #eef6ff;
+}
+
+.dataset-row-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.dataset-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dataset-row-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #124060;
+  background: #dcecf7;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dataset-row-path {
+  min-width: 0;
+  color: #556575;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dataset-detail-panel {

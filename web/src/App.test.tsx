@@ -122,6 +122,16 @@ describe("App", () => {
     expect(screen.getByText("1 rows")).toBeInTheDocument();
   });
 
+  it("renders dataset rows as compact list items with truncated paths", async () => {
+    render(<App />);
+
+    const row = await screen.findByRole("button", { name: customDatasetButtonName });
+
+    expect(row.querySelector(".dataset-row-main")).not.toBeNull();
+    expect(row.querySelector(".dataset-row-path")).toHaveTextContent("data/custom.csv");
+    expect(row.querySelector(".dataset-row-count")).toHaveTextContent("Rows: 1");
+  });
+
   it("keeps the selected dataset preview when preview responses arrive out of order", async () => {
     const user = userEvent.setup();
     const customPreview = createDeferredResponse({
