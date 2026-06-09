@@ -207,10 +207,10 @@ def test_render_upload_page_contains_form_and_brand():
     assert "viewReport" in page
     assert "selectedReportUrl" in page
     assert "window.location.href = selectedReportUrl" in page
-    assert "#004b93" in page
-    assert "#00a7c8" in page
-    assert "border-top: 4px solid var(--ats-cyan)" in page
-    assert "background: linear-gradient(135deg, var(--ats-blue-dark), var(--ats-blue));" in page
+    assert "#176f95" in page
+    assert "#1aa6c8" in page
+    assert "border-top: 3px solid var(--ats-cyan)" in page
+    assert "linear-gradient(180deg, var(--ats-blue-deep), var(--ats-blue-dark) 54%, var(--ats-blue));" in page
     assert "Upload dataset window" in page
     assert "Report analysis" in page
     assert 'id="pageLanguage"' in page
@@ -432,7 +432,7 @@ def test_dataset_workbench_uses_flat_simplified_layout():
     assert "box-shadow: none;" in input_panel_block
     generate_button_block = page[page.index("#generateAnswerButton {"):page.index("#regenerateAnswerButton,")]
     assert "color: #ffffff;" in generate_button_block
-    assert "background: #005bac;" in generate_button_block
+    assert "background: var(--ats-blue-700);" in generate_button_block
     assert ".qa-save-panel button[type='submit'] {\n      min-height: var(--qa-control-height);" in page
     assert ".manual-qa-panel > .section-heading::before" not in page
     assert "border-left: 4px solid var(--qa-accent);" not in page
@@ -441,10 +441,10 @@ def test_dataset_workbench_uses_flat_simplified_layout():
 def test_dataset_page_has_refined_enterprise_saas_visual_treatment():
     page = api.render_upload_page(result_reports=[])
 
-    assert "--qa-surface: #f6f9fd;" in page
+    assert "--qa-surface: var(--ats-blue-50);" in page
     assert "--qa-border-solid: #d8e4f0;" in page
-    assert "--qa-card-radius: 16px;" in page
-    assert ".dataset-create-grid {\n      display: grid;\n      gap: 18px;\n      min-width: 0;\n      padding: 20px 24px 24px;\n      background: #f6f9fd;" in page
+    assert "--qa-card-radius: 8px;" in page
+    assert ".dataset-create-grid {\n      display: grid;\n      gap: 18px;\n      min-width: 0;\n      padding: 20px 24px 24px;\n      background: transparent;" in page
     assert ".dataset-workbench {\n      position: relative;" in page
     assert ".dataset-workbench::before {" in page
     assert "background: #d8e4f0;" in page
@@ -469,13 +469,13 @@ def test_dataset_page_uses_four_step_workbench_from_reference():
         assert step_class in page
     assert 'class="dataset-file-summary"' in page
     assert 'id="datasetFileName"' in page
-    assert 'id="datasetFileMeta"' in page
+    assert 'id="datasetFileMeta"' not in page
     assert 'class="qa-card qa-question-card"' in page
     assert 'class="qa-card qa-answer-card"' in page
     assert 'id="manualQaQuestionCount"' in page
     assert 'id="manualQaAnswerCount"' in page
     assert 'class="dataset-action-card dataset-flow-card dataset-step-card dataset-step-actions"' in page
-    assert 'id="datasetSaveStatus"' in page
+    assert 'id="datasetSaveStatus"' not in page
     assert 'id="datasetRowsTable"' in page
 
 
@@ -528,7 +528,7 @@ def test_dataset_generation_actions_stack_below_step_title():
     assert 'class="dataset-action-section-copy"' not in action_card
     assert 'class="answer-generation-actions dataset-action-buttons"' in page
     assert 'class="dataset-save-shell"' in page
-    assert 'class="dataset-save-state-dot" aria-hidden="true"' in page
+    assert 'class="dataset-save-state-dot" aria-hidden="true"' not in page
     assert 'class="dataset-save-button-group"' in page
     assert 'class="dataset-save-menu-button" type="button" aria-label="保存选项"' not in page
     assert ".dataset-step-actions {\n      gap: 16px;\n      grid-template-columns: minmax(0, 1fr);\n      grid-template-areas:\n        \"heading\"\n        \"actions\"\n        \"references\";" in page
@@ -538,7 +538,7 @@ def test_dataset_generation_actions_stack_below_step_title():
     assert ".dataset-action-row {\n      display: grid;\n      grid-template-columns: minmax(360px, auto) minmax(64px, 1fr) minmax(480px, 620px);\n      align-items: center;" in page
     assert ".dataset-action-section {\n      display: flex;\n      justify-content: space-between;\n      align-items: center;" in page
     assert ".dataset-save-shell {\n      display: grid;" in page
-    assert ".dataset-save-info-card {\n      display: grid;" in page
+    assert ".dataset-save-info-card {\n      display: grid;" not in page
     assert ".dataset-action-card .retrieved-passages-details {\n      width: 100%;\n      max-width: none;" in page
     assert ".dataset-action-card .dataset-preview-summary {\n      min-height: 52px;" in page
 
@@ -553,10 +553,10 @@ def test_dataset_generation_and_save_sections_are_full_width_and_low_noise():
     assert ".dataset-generation-section .dataset-action-buttons {\n      width: auto;" in page
     assert ".dataset-save-section {\n      grid-column: 3;\n      justify-self: end;" in page
     assert ".dataset-action-buttons button {\n      min-width: 118px;" in page
-    assert "#generateAnswerButton {\n      width: 150px;" in page
-    assert ".dataset-save-shell {\n      display: grid;\n      grid-template-columns: minmax(0, 1fr) 150px;\n      gap: 14px;\n      align-items: stretch;\n      min-width: 0;\n      width: 100%;\n      min-height: 52px;\n      padding: 0;\n      border: 0;\n      border-radius: 0;\n      background: transparent;" in page
-    assert ".dataset-save-info-card {\n      display: grid;\n      grid-template-columns: 22px minmax(0, 1fr);\n      gap: 12px;\n      align-items: center;\n      min-width: 0;\n      min-height: 52px;\n      padding: 8px 14px;\n      border: 1px solid rgba(183, 204, 225, .72);\n      border-radius: 12px;\n      background: #f8fbff;" in page
-    assert ".dataset-save-button-group button[type='submit'] {\n      width: 150px;" in page
+    assert "#generateAnswerButton {\n      width: var(--qa-primary-action-width);" in page
+    assert ".dataset-save-shell {\n      display: grid;\n      grid-template-columns: var(--qa-primary-action-width);\n      gap: 0;\n      align-items: stretch;\n      justify-content: end;\n      min-width: 0;\n      width: auto;\n      min-height: var(--qa-primary-action-height);\n      padding: 0;\n      border: 0;\n      border-radius: 0;\n      background: transparent;" in page
+    assert ".dataset-save-info-card {\n      display: grid;" not in page
+    assert ".dataset-save-button-group button[type='submit'] {\n      width: var(--qa-primary-action-width);" in page
     assert ".dataset-list-panel {\n      display: grid;\n      gap: 14px;\n      min-width: 0;\n      padding: 18px 22px;" in page
     assert ".qa-card textarea {\n      min-height: 140px;" in page
 
@@ -565,21 +565,22 @@ def test_dataset_save_panel_anchors_to_right_edge_of_action_row():
     page = api.render_upload_page(result_reports=[])
 
     assert ".dataset-save-section {\n      grid-column: 3;\n      justify-self: end;" in page
-    assert ".dataset-save-section .qa-save-panel {\n      flex: 0 1 620px;\n      width: 100%;\n      max-width: 620px;\n      margin-left: auto;" in page
-    assert ".dataset-save-shell {\n      display: grid;\n      grid-template-columns: minmax(0, 1fr) 150px;\n      gap: 14px;\n      align-items: stretch;\n      min-width: 0;\n      width: 100%;\n      min-height: 52px;\n      padding: 0;" in page
+    assert ".dataset-save-section .qa-save-panel {\n      display: flex;\n      justify-content: flex-end;\n      flex: 0 0 auto;\n      width: auto;\n      max-width: none;\n      margin-left: auto;" in page
+    assert ".dataset-save-shell {\n      display: grid;\n      grid-template-columns: var(--qa-primary-action-width);\n      gap: 0;\n      align-items: stretch;\n      justify-content: end;\n      min-width: 0;\n      width: auto;\n      min-height: var(--qa-primary-action-height);\n      padding: 0;" in page
 
 
-def test_dataset_save_ui_separates_target_card_from_submit_button():
+def test_dataset_save_ui_uses_compact_submit_button():
     page = api.render_upload_page(result_reports=[])
 
     save_card = page[page.index('class="dataset-save-shell"'):page.index('class="qa-reference-grid"')]
-    assert 'class="dataset-save-info-card"' in save_card
-    assert save_card.index('class="dataset-save-info-card"') < save_card.index('class="dataset-save-button-group"')
-    assert ".dataset-save-shell {\n      display: grid;\n      grid-template-columns: minmax(0, 1fr) 150px;\n      gap: 14px;\n      align-items: stretch;\n      min-width: 0;\n      width: 100%;\n      min-height: 52px;\n      padding: 0;\n      border: 0;\n      border-radius: 0;\n      background: transparent;" in page
-    assert ".dataset-save-info-card {\n      display: grid;\n      grid-template-columns: 22px minmax(0, 1fr);" in page
-    assert ".manual-qa-save-target small {\n      color: #5f7390;\n      font-size: 12px;\n      font-weight: 500;\n      max-width: none;" in page
-    assert ".dataset-save-button-group {\n      display: flex;\n      align-items: stretch;\n      justify-content: flex-end;\n      justify-self: end;\n      width: 150px;" in page
-    assert ".dataset-save-button-group button[type='submit'] {\n      width: 150px;" in page
+    assert 'class="dataset-save-info-card"' not in save_card
+    assert 'class="manual-qa-save-target"' not in save_card
+    assert 'class="dataset-save-button-group"' in save_card
+    assert ".dataset-save-shell {\n      display: grid;\n      grid-template-columns: var(--qa-primary-action-width);\n      gap: 0;\n      align-items: stretch;\n      justify-content: end;\n      min-width: 0;\n      width: auto;\n      min-height: var(--qa-primary-action-height);\n      padding: 0;\n      border: 0;\n      border-radius: 0;\n      background: transparent;" in page
+    assert ".dataset-save-info-card {\n      display: grid;" not in page
+    assert ".manual-qa-save-target small {" not in page
+    assert ".dataset-save-button-group {\n      display: flex;\n      align-items: stretch;\n      justify-content: flex-end;\n      justify-self: end;\n      width: var(--qa-primary-action-width);" in page
+    assert ".dataset-save-button-group button[type='submit'] {\n      width: var(--qa-primary-action-width);" in page
 
 
 def test_dataset_final_reference_polishes_minor_visual_details():
@@ -588,14 +589,14 @@ def test_dataset_final_reference_polishes_minor_visual_details():
     assert ".dataset-step-badge {\n      display: inline-grid;" in page
     assert "color: var(--ats-blue);" in page
     assert "background: #eaf2fb;" in page
-    assert "box-shadow: 0 6px 14px rgba(0, 75, 147, .10);" in page
+    assert "box-shadow: 0 6px 14px rgba(23, 111, 149, .13);" in page
     assert ".dataset-preview-summary::after,\n    .qa-candidate-summary::after {\n      content: \"⌄\";" in page
     assert "details[open] > .dataset-preview-summary::after,\n    details[open] > .qa-candidate-summary::after {\n      content: \"⌃\";" in page
     assert ".dataset-view-all-button::after {\n      content: \"›\";" in page
-    assert 'class="dataset-save-state-dot" aria-hidden="true">▱</span>' in page
-    assert ".dataset-save-state-dot {\n      display: inline-grid;" in page
+    assert 'class="dataset-save-state-dot" aria-hidden="true">▱</span>' not in page
+    assert ".dataset-save-state-dot {\n      display: inline-grid;" not in page
     assert "color: var(--ats-blue);" in page
-    assert "background: #eef6ff;" in page
+    assert "--qa-accent-soft: #eef6ff;" in page
     assert 'aria-label=\\"查看当前问答\\" title=\\"查看\\">◎</button>' in page
 
 
@@ -606,8 +607,8 @@ def test_dataset_final_screen_detail_density_is_polished():
     assert ".dataset-step-card {\n      display: grid;\n      gap: 16px;\n      padding: 22px 24px;" in page
     assert ".dataset-step-actions {\n      gap: 16px;" in page
     assert ".dataset-action-row {\n      display: grid;\n      grid-template-columns: minmax(360px, auto) minmax(64px, 1fr) minmax(480px, 620px);\n      align-items: center;" in page
-    assert ".dataset-save-section .qa-save-panel {\n      flex: 0 1 620px;\n      width: 100%;" in page
-    assert ".dataset-save-shell {\n      display: grid;\n      grid-template-columns: minmax(0, 1fr) 150px;\n      gap: 14px;\n      align-items: stretch;\n      min-width: 0;\n      width: 100%;" in page
+    assert ".dataset-save-section .qa-save-panel {\n      display: flex;\n      justify-content: flex-end;\n      flex: 0 0 auto;\n      width: auto;" in page
+    assert ".dataset-save-shell {\n      display: grid;\n      grid-template-columns: var(--qa-primary-action-width);\n      gap: 0;\n      align-items: stretch;\n      justify-content: end;\n      min-width: 0;\n      width: auto;" in page
     assert ".dataset-action-card .dataset-preview-summary {\n      min-height: 52px;\n      padding: 11px 16px;" in page
     assert ".dataset-list-panel {\n      display: grid;\n      gap: 14px;\n      min-width: 0;\n      padding: 18px 22px;" in page
     assert "#datasets .records-table {\n      font-size: 13px;" in page
@@ -619,26 +620,26 @@ def test_dataset_console_uses_consistent_controls_and_lighter_inventory():
     page = api.render_upload_page(result_reports=[])
 
     assert "--qa-control-height: 44px;" in page
-    assert "--qa-control-radius: 10px;" in page
+    assert "--qa-control-radius: 8px;" in page
     assert "#datasets input,\n    #datasets textarea,\n    #datasets select {\n      border-color: #d8e4f0;\n      border-radius: var(--qa-control-radius);" in page
     assert "#datasets button {\n      min-height: var(--qa-control-height);\n      border-radius: var(--qa-control-radius);" in page
-    assert ".answer-generation-actions {\n      display: grid;\n      grid-template-columns: 150px 132px 118px;" in page
-    assert "#generateAnswerButton {\n      width: 150px;\n      min-height: var(--qa-control-height);" in page
+    assert ".answer-generation-actions {\n      display: grid;\n      grid-template-columns: var(--qa-primary-action-width) 132px 118px;" in page
+    assert "#generateAnswerButton {\n      width: var(--qa-primary-action-width);\n      min-height: var(--qa-primary-action-height);" in page
     assert "#regenerateAnswerButton,\n    #clearGeneratedAnswerButton {\n      min-height: var(--qa-control-height);" in page
     assert "#regenerateAnswerButton {\n      width: 132px;" in page
     assert "#clearGeneratedAnswerButton {\n      width: 118px;" in page
-    assert ".dataset-save-button-group button[type='submit'] {\n      width: 150px;\n      min-height: var(--qa-control-height);" in page
+    assert ".dataset-save-button-group button[type='submit'] {\n      width: var(--qa-primary-action-width);\n      min-height: var(--qa-primary-action-height);" in page
     assert "#datasets .table-scroll {\n      border: 1px solid rgba(216, 228, 240, .78);" in page
-    assert "#datasets .records-table th {\n      padding: 12px 16px;\n      color: #0b2f5b;\n      background: #f4f8fc;" in page
-    assert "#datasets .records-table tbody tr:hover td {\n      background: #fbfdff;" in page
+    assert "#datasets .records-table th {\n      position: sticky;\n      top: 0;\n      z-index: 1;\n      padding: 12px 16px;\n      color: #0b2f5b;\n      background: #eef4f8;" in page
+    assert "#datasets .records-table tbody tr:hover td {\n      background: #f7fafc;" in page
 
 
 def test_dataset_console_matches_enterprise_saas_workbench_spec():
     page = api.render_upload_page(result_reports=[])
 
-    assert "background: #f6f9fd;" in page
-    assert "--qa-card-radius: 16px;" in page
-    assert "--qa-button-radius: 10px;" in page
+    assert "--ats-blue-50: #f2fbfd;" in page
+    assert "--qa-card-radius: 8px;" in page
+    assert "--qa-button-radius: 8px;" in page
     assert "--qa-border-solid: #d8e4f0;" in page
     assert ".dataset-flow-card {\n      min-width: 0;\n      border: 1px solid var(--qa-border-solid);\n      border-radius: var(--qa-card-radius);" in page
     assert ".dataset-step-dataset {\n      min-height: 96px;" in page
@@ -647,8 +648,8 @@ def test_dataset_console_matches_enterprise_saas_workbench_spec():
     assert '答案（标准答案）' in page
     assert 'placeholder="请输入您想要添加的问题..."' in page
     assert 'placeholder="请输入标准答案（Golden answer）..."' in page
-    assert 'class="save-target-title">保存到数据集</span>' in page
-    assert '将当前问答保存到' in page
+    assert 'class="save-target-title">保存到数据集</span>' not in page
+    assert '将当前问答保存到' not in page
     assert 'class="dataset-preview-summary-title">召回片段</span>' in page
     assert '展开查看模型检索到的相关片段信息' in page
     assert '<th data-i18n="modifiedHeader">Modified</th>' not in page
@@ -693,7 +694,7 @@ def test_dataset_actions_use_stable_single_row_toolbar_layout():
     assert ".dataset-action-section {\n      display: flex;\n      justify-content: space-between;\n      align-items: center;" in page
     assert ".dataset-action-buttons {\n      display: flex;" in page
     assert ".dataset-save-shell {\n      display: grid;" in page
-    assert ".dataset-save-info-card {\n      display: grid;" in page
+    assert ".dataset-save-info-card {\n      display: grid;" not in page
     assert ".dataset-save-button-group {\n      display: flex;" in page
     assert ".dataset-save-button-group button[type='submit']::after" in page
     assert "class=\"dataset-save-menu-button\"" not in page
@@ -1018,9 +1019,9 @@ def test_dataset_window_uses_short_plain_labels():
     assert 'data-i18n="targetDataset">操作数据集<' in page
     assert 'data-i18n="previewDatasetSummary"' not in page
     assert 'data-i18n="candidateQa">' not in page
-    assert 'id="manualQaSaveTarget"' in page
-    assert 'id="datasetSaveStatus" class="save-target-title">保存到数据集</span>' in page
-    assert '将当前问答保存到 <strong></strong>' in page
+    assert 'id="manualQaSaveTarget"' not in page
+    assert 'id="datasetSaveStatus" class="save-target-title">保存到数据集</span>' not in page
+    assert '将当前问答保存到 <strong></strong>' not in page
     assert 'data-i18n="saveManualQa" data-ready-text="Save Q&A" data-loading-text="Saving...">保存问答<' in page
     assert 'data-i18n="saveSelectedQa">' not in page
     assert 'data-i18n="clearCandidates">' not in page
@@ -1215,8 +1216,8 @@ def test_sidebar_navigation_labels_are_centered():
     css = nav_button_css.group("body")
     assert "display: flex;" in css
     assert "align-items: center;" in css
-    assert "justify-content: center;" in css
-    assert "text-align: center;" in css
+    assert "justify-content: flex-start;" in css
+    assert "text-align: left;" in css
 
 
 def test_records_table_cells_are_vertically_centered():

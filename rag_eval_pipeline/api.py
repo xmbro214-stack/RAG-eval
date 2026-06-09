@@ -2230,7 +2230,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     const manualQaDatasetSelect = document.getElementById("manualQaDatasetSelect");
     const manualQaResult = document.getElementById("manualQaResult");
     const manualQaButton = manualQaForm ? manualQaForm.querySelector("button[type='submit']") : null;
-    const manualQaSaveTarget = document.getElementById("manualQaSaveTarget");
     const manualQaQuestionTextarea = document.getElementById("manualQaQuestionTextarea");
     const manualQaAnswerTextarea = document.getElementById("manualQaAnswerTextarea");
     const uploadDialog = document.getElementById("uploadDialog");
@@ -3495,6 +3494,8 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       --qa-button-radius: 10px;
       --qa-control-height: 44px;
       --qa-control-radius: 10px;
+      --qa-primary-action-width: 150px;
+      --qa-primary-action-height: 52px;
       --qa-shadow: 0 10px 26px rgba(30, 49, 68, .08);
       display: grid;
       gap: 16px;
@@ -3733,14 +3734,15 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
 
     .answer-generation-actions {{
       display: grid;
-      grid-template-columns: 150px 132px 118px;
+      grid-template-columns: var(--qa-primary-action-width) 132px 118px;
       gap: 16px;
       align-items: center;
     }}
 
     #generateAnswerButton {{
-      width: 150px;
-      min-height: var(--qa-control-height);
+      width: var(--qa-primary-action-width);
+      min-height: var(--qa-primary-action-height);
+      height: var(--qa-primary-action-height);
       color: #ffffff;
       background: #005bac;
       border: 1px solid var(--ats-blue-700);
@@ -4100,13 +4102,16 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       justify-self: end;
       justify-content: flex-end;
       margin-left: auto;
+      width: max-content;
       background: transparent;
     }}
 
     .dataset-save-section .qa-save-panel {{
-      flex: 0 1 620px;
-      width: 100%;
-      max-width: 620px;
+      display: flex;
+      justify-content: flex-end;
+      flex: 0 0 auto;
+      width: auto;
+      max-width: none;
       margin-left: auto;
     }}
 
@@ -4157,17 +4162,18 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
 
     .dataset-save-shell {{
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 150px;
-      gap: 14px;
+      grid-template-columns: var(--qa-primary-action-width);
+      gap: 0;
       align-items: stretch;
+      justify-content: end;
       min-width: 0;
-      width: 100%;
-      min-height: 52px;
+      width: auto;
+      min-height: var(--qa-primary-action-height);
       padding: 0;
       border: 0;
       border-radius: 0;
       background: transparent;
-      flex: 1 1 600px;
+      flex: 0 0 auto;
       max-width: none;
     }}
 
@@ -4201,7 +4207,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       align-items: stretch;
       justify-content: flex-end;
       justify-self: end;
-      width: 150px;
+      width: var(--qa-primary-action-width);
       min-width: 0;
       margin-left: auto;
       border-radius: 8px;
@@ -4215,8 +4221,9 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     }}
 
     .dataset-save-button-group button[type='submit'] {{
-      width: 150px;
-      min-height: var(--qa-control-height);
+      width: var(--qa-primary-action-width);
+      min-height: var(--qa-primary-action-height);
+      height: var(--qa-primary-action-height);
       padding: 0 14px 0 18px;
       justify-content: space-between;
     }}
@@ -5043,9 +5050,9 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       .manual-qa-form {{ grid-template-columns: 1fr; grid-template-areas: "context" "body" "generate" "save" "references"; }}
       .qa-context-bar, .qa-dataset-control, .qa-save-panel, .qa-reference-grid {{ grid-template-columns: 1fr; }}
       .dataset-action-row {{ grid-template-columns: minmax(0, 1fr); }}
-      .dataset-save-section {{ grid-column: auto; justify-self: stretch; }}
+      .dataset-save-section {{ grid-column: auto; justify-self: end; width: max-content; }}
       .dataset-action-section {{ align-items: stretch; }}
-      .dataset-save-shell {{ width: 100%; flex-basis: auto; }}
+      .dataset-save-shell {{ width: auto; flex-basis: auto; }}
     }}
 
     @media (max-width: 760px) {{
@@ -5062,6 +5069,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       .report-toolbar, .report-control-strip, .report-preview-area, .report-chat-area {{ padding-left: 14px; padding-right: 14px; }}
       .manual-qa-row-top, .manual-qa-row-body {{ grid-template-columns: 1fr; }}
       .answer-generation-actions, .dataset-action-buttons, .dataset-action-section {{ display: grid; grid-template-columns: 1fr; }}
+      .dataset-save-section {{ width: 100%; justify-self: stretch; }}
       .dataset-save-shell {{ grid-template-columns: 1fr; }}
       .dataset-save-button-group {{ width: 100%; }}
       .dataset-save-button-group button[type='submit'] {{ width: 100%; }}
@@ -5293,13 +5301,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
                     <section class="dataset-action-section dataset-save-section">
                       <div class="qa-save-panel dataset-module dataset-module-save">
                         <div class="dataset-save-shell">
-                          <div class="dataset-save-info-card">
-                            <span class="dataset-save-state-dot" aria-hidden="true">▱</span>
-                            <div id="manualQaSaveTarget" class="manual-qa-save-target">
-                              <span id="datasetSaveStatus" class="save-target-title">保存到数据集</span>
-                              <small>将当前问答保存到 <strong></strong></small>
-                            </div>
-                          </div>
                           <div class="dataset-save-button-group">
                             <button type="submit" data-i18n="saveManualQa" data-ready-text="Save Q&A" data-loading-text="Saving...">保存问答</button>
                           </div>
@@ -6467,10 +6468,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
         manualQaDatasetSelect.disabled = true;
         if (manualQaButton) manualQaButton.disabled = true;
         if (manualQaDatasetPath) manualQaDatasetPath.textContent = "";
-        if (manualQaSaveTarget) {{
-          const targetValue = manualQaSaveTarget.querySelector("strong");
-          if (targetValue) targetValue.textContent = "-";
-        }}
         return;
       }}
       const selectedValue = manualQaDatasetSelect.value;
@@ -6494,14 +6491,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       manualQaDatasetPath.textContent = selectedPath;
       manualQaDatasetPath.title = selectedPath;
       updateDatasetFileSummary();
-      if (manualQaSaveTarget) {{
-        const targetValue = manualQaSaveTarget.querySelector("strong");
-        if (targetValue) {{
-          targetValue.textContent = selectedPath || "-";
-          targetValue.title = selectedPath;
-        }}
-      }}
-      if (datasetSaveStatus) datasetSaveStatus.textContent = "保存到数据集";
     }}
 
     async function refreshDatasets() {{

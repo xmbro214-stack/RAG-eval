@@ -201,3 +201,34 @@ python -m pytest -q
 ```powershell
 python -m py_compile rag_eval_pipeline\api.py
 ```
+
+## Frontend and Backend Development
+
+Start the FastAPI backend:
+
+```powershell
+python -m rag_eval_pipeline.api --host 127.0.0.1 --port 9000
+```
+
+Start the React/Vite frontend:
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173
+```
+
+Build the frontend for FastAPI static serving:
+
+```powershell
+cd web
+npm run build
+```
+
+After the build, the backend serves the React app from `web/dist` at `/` and `/datasets`.
