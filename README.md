@@ -55,7 +55,7 @@ cd web
 npm install
 ```
 
-## Start Backend
+## Start App
 
 Start the FastAPI backend:
 
@@ -63,15 +63,17 @@ Start the FastAPI backend:
 python -m rag_eval_pipeline.api --host 127.0.0.1 --port 9000
 ```
 
-Open:
+Use this address for normal usage:
 
 ```text
 http://127.0.0.1:9000/datasets
 ```
 
-## Start Frontend In Development
+The backend also serves the built React frontend from `web/dist`.
 
-Run the backend first, then start Vite:
+## Frontend Development Only
+
+Use Vite only when editing React or CSS and you want hot reload. Run the backend first, then start Vite:
 
 ```powershell
 cd web
@@ -84,7 +86,7 @@ Open:
 http://127.0.0.1:5173
 ```
 
-Vite proxies API calls to the backend.
+Vite shows the same app and proxies API calls to the backend on port `9000`.
 
 ## Build Frontend For Backend Serving
 
