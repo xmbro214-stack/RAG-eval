@@ -40,7 +40,7 @@ def write_dataset(path: Path) -> None:
     with path.open("w", newline="", encoding="utf-8") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=["query_id", "query", "expected_answer"])
         writer.writeheader()
-        writer.writerow({"query_id": "q1", "query": "What is A?", "expected_answer": "Answer A"})
+        writer.writerow({"query_id": "query_1", "query": "What is A?", "expected_answer": "Answer A"})
 
 
 def test_reports_route_lists_html_reports(tmp_path):
@@ -100,3 +100,117 @@ def test_dataset_preview_route_returns_rows(tmp_path):
     assert payload["ok"] is True
     assert payload["rows"] == 1
     assert payload["preview_rows"][0]["query"] == "What is A?"
+
+
+def test_upload_route_saves_csv_dataset(tmp_path):
+    client = make_client(tmp_path)
+
+    response = client.post(
+        "/api/datasets/upload",
+        data={"name": "Support QA"},
+        files={"file": ("qa.csv", b"query_id,query,expected_answer\nq1,What is A?,Answer A\n", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["dataset_name"] == "support_qa"
+    assert (tmp_path / "uploaded" / "support_qa.csv").exists()
+
+
+def test_manual_qa_route_appends_row(tmp_path):
+    client = make_client(tmp_path)
+    dataset_path = tmp_path / "uploaded" / "custom.csv"
+    write_dataset(dataset_path)
+
+    response = client.post(
+        "/api/datasets/manual-qa",
+        json={
+            "target_dataset": str(dataset_path),
+            "question": "What is B?",
+            "expected_answer": "Answer B",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["appended_query_id"] == "query_2"
+
+
+def test_bulk_qa_route_appends_rows(tmp_path):
+    client = make_client(tmp_path)
+    dataset_path = tmp_path / "uploaded" / "custom.csv"
+    write_dataset(dataset_path)
+
+    response = client.post(
+        "/api/datasets/bulk-qa",
+        json={
+            "target_dataset": str(dataset_path),
+            "rows": [{"question": "What is C?", "expected_answer": "Answer C"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["saved"] == 1
+
+
+def test_generate_qa_route_returns_candidates(monkeypatch, tmp_path):
+    client = make_client(tmp_path)
+
+    def fake_generate_qa_candidates(source_text, count, language):
+        assert source_text == "SM94 text"
+        assert count == 5
+        assert language == "zh"
+        return {"ok": True, "candidates": [{"question": "What is SM94?", "expected_answer": "SM94 is an SR dent."}]}
+
+    monkeypatch.setattr("rag_eval_pipeline.api.generate_qa_candidates", fake_generate_qa_candidates)
+
+    response = client.post("/api/datasets/generate-qa", json={"source_text": "SM94 text", "count": 5, "language": "zh"})
+
+    assert response.status_code == 200
+    assert response.json()["candidates"][0]["question"] == "What is SM94?"
+
+
+def test_generate_answer_route_returns_answer(monkeypatch, tmp_path):
+    client = make_client(tmp_path)
+
+    def fake_generate_answer_from_question(question, language, config_path):
+        assert question == "What is SM94?"
+        assert language == "zh"
+        return {"ok": True, "question": question, "expected_answer": "Generated answer", "passages": []}
+
+    monkeypatch.setattr("rag_eval_pipeline.api.generate_answer_from_question", fake_generate_answer_from_question)
+
+    response = client.post("/api/datasets/generate-answer", json={"question": "What is SM94?", "language": "zh"})
+
+    assert response.status_code == 200
+    assert response.json()["expected_answer"] == "Generated answer"
+
+
+def test_regenerate_answer_route_returns_answer(monkeypatch, tmp_path):
+    client = make_client(tmp_path)
+
+    def fake_regenerate_answer_from_passages(question, current_answer, passages, language, config_path):
+        assert question == "What is SM94?"
+        assert current_answer == "Old answer"
+        assert passages == [{"text": "Retrieved passage"}]
+        assert language == "zh"
+        return {"ok": True, "expected_answer": "Improved answer"}
+
+    monkeypatch.setattr("rag_eval_pipeline.api.regenerate_answer_from_passages", fake_regenerate_answer_from_passages)
+
+    response = client.post(
+        "/api/datasets/regenerate-answer",
+        json={
+            "question": "What is SM94?",
+            "current_answer": "Old answer",
+            "passages": [{"text": "Retrieved passage"}],
+            "language": "zh",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["expected_answer"] == "Improved answer"
