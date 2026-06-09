@@ -8,6 +8,9 @@ export type ReportItem = {
 export type DatasetItem = {
   name: string;
   path: string;
+  dataset_id?: string;
+  modified?: string;
+  runnable?: boolean;
   rows?: number;
   source?: string;
 };
@@ -46,4 +49,17 @@ export type DatasetPreview = {
   ok: true;
   rows: number;
   preview_rows: Array<Record<string, string>>;
+};
+
+export type DatasetUploadResponse = {
+  ok: true;
+  dataset_name: string;
+  path: string;
+  rows?: number;
+};
+
+export type ManualQaSaveResponse = {
+  ok: true;
+  appended_query_id: string;
+  path?: string;
 };

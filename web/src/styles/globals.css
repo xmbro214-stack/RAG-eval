@@ -205,3 +205,105 @@ textarea {
 .error-text {
   color: #a83232;
 }
+
+.notice-text {
+  color: #146c43;
+  font-weight: 700;
+}
+
+.datasets-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.data-row.active {
+  border-color: #005bac;
+  background: #eef6ff;
+}
+
+.dataset-detail-panel {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.dataset-preview-panel,
+.manual-qa-form-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #d8e4f0;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.dataset-preview-panel h2,
+.manual-qa-form-panel h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 16px;
+}
+
+.muted-text {
+  margin: 0;
+  color: #556575;
+  overflow-wrap: anywhere;
+}
+
+.preview-table {
+  display: grid;
+  gap: 6px;
+}
+
+.preview-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 120px) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid #d8e4f0;
+  border-radius: 6px;
+  background: #f8fbfe;
+}
+
+.manual-qa-form-panel label {
+  display: grid;
+  gap: 6px;
+}
+
+.manual-qa-form-panel textarea {
+  min-height: 86px;
+  padding: 8px;
+  border: 1px solid #c9d7e5;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.manual-qa-form-panel button {
+  justify-self: start;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  background: #005bac;
+  cursor: pointer;
+}
+
+.manual-qa-form-panel button:disabled,
+.toolbar-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+@media (max-width: 900px) {
+  .datasets-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-row {
+    grid-template-columns: 1fr;
+  }
+}

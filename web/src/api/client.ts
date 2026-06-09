@@ -1,4 +1,13 @@
-import type { DatasetItem, DatasetPreview, EvalRunItem, PipelineJob, ReportItem, RunOptions } from "./types";
+import type {
+  DatasetItem,
+  DatasetPreview,
+  DatasetUploadResponse,
+  EvalRunItem,
+  ManualQaSaveResponse,
+  PipelineJob,
+  ReportItem,
+  RunOptions
+} from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -54,10 +63,26 @@ export const apiClient = {
     });
   },
 
-  async uploadDataset(name: string, file: File): Promise<Record<string, unknown>> {
+  async uploadDataset(name: string, file: File): Promise<DatasetUploadResponse> {
     const body = new FormData();
     body.set("name", name);
     body.set("file", file);
-    return requestJson<Record<string, unknown>>("/api/datasets/upload", { method: "POST", body });
+    return requestJson<DatasetUploadResponse>("/api/datasets/upload", { method: "POST", body });
+  },
+
+  async saveManualQa(
+    targetDataset: string,
+    question: string,
+    expectedAnswer: string
+  ): Promise<ManualQaSaveResponse> {
+    return requestJson<ManualQaSaveResponse>("/api/datasets/manual-qa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target_dataset: targetDataset,
+        question,
+        expected_answer: expectedAnswer
+      })
+    });
   }
 };

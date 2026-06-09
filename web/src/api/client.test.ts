@@ -21,6 +21,27 @@ describe("apiClient", () => {
     expect(reports[0].name).toBe("smoke.html");
   });
 
+  it("saves manual Q&A rows with backend field names", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, appended_query_id: "query_2" })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = await apiClient.saveManualQa("data/custom.csv", "What is A?", "Answer A");
+
+    expect(payload.appended_query_id).toBe("query_2");
+    expect(fetchMock).toHaveBeenCalledWith("/api/datasets/manual-qa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target_dataset: "data/custom.csv",
+        question: "What is A?",
+        expected_answer: "Answer A"
+      })
+    });
+  });
+
   it("throws ApiError for backend errors", async () => {
     vi.stubGlobal(
       "fetch",
