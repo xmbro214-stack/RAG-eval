@@ -23,11 +23,21 @@ export function Reports() {
       <h1>Reports</h1>
       {error ? <p className="error-text">{error}</p> : null}
       <div className="split-panel">
-        <div className="data-table">
+        <div className="reports-list">
           {reports.map((report) => (
-            <button className="data-row button-row" key={report.url} onClick={() => setSelectedReport(report)} type="button">
-              <strong>{report.name}</strong>
-              <span>{report.modified}</span>
+            <button
+              className={selectedReport?.url === report.url ? "report-row active" : "report-row"}
+              key={report.url}
+              onClick={() => setSelectedReport(report)}
+              type="button"
+            >
+              <span className="report-row-main">
+                <strong className="report-row-name">{report.name}</strong>
+                <span className="report-row-date">{report.modified}</span>
+              </span>
+              <span className="report-row-path" title={report.url}>
+                {report.url}
+              </span>
             </button>
           ))}
         </div>

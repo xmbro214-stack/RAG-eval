@@ -302,6 +302,20 @@ describe("App", () => {
     expect(await screen.findByText("smoke.html")).toBeInTheDocument();
   });
 
+  it("renders report rows with separated name, date, and path", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Reports" }));
+
+    const row = await screen.findByRole("button", { name: /smoke\.html/i });
+
+    expect(row.querySelector(".report-row-main")).not.toBeNull();
+    expect(row.querySelector(".report-row-name")).toHaveTextContent("smoke.html");
+    expect(row.querySelector(".report-row-date")).toHaveTextContent("2026-06-09");
+    expect(row.querySelector(".report-row-path")).toHaveTextContent("/reports/smoke.html");
+  });
+
   it("loads evaluation runs when switching to Records", async () => {
     const user = userEvent.setup();
     render(<App />);
