@@ -271,6 +271,15 @@ describe("App", () => {
     expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/datasets")).toHaveLength(2);
   });
 
+  it("renders upload controls without the native file input text", async () => {
+    render(<App />);
+
+    expect(await screen.findByPlaceholderText("Dataset name (optional)")).toBeInTheDocument();
+    expect(screen.getByText("Choose file")).toBeInTheDocument();
+    expect(screen.getByText("No file selected")).toBeInTheDocument();
+    expect(screen.getByLabelText("Dataset file")).toHaveClass("hidden-file-input");
+  });
+
   it("saves manual Q&A to the selected dataset", async () => {
     const user = userEvent.setup();
     render(<App />);

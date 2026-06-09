@@ -188,16 +188,22 @@ export function Datasets() {
           aria-label="Dataset name"
           disabled={uploading}
           onChange={(event) => setUploadName(event.target.value)}
+          placeholder="Dataset name (optional)"
           value={uploadName}
         />
-        <input
-          aria-label="Dataset file"
-          accept=".csv,.pdf,text/csv,application/pdf"
-          disabled={uploading}
-          key={fileInputKey}
-          onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
-          type="file"
-        />
+        <label className={uploading ? "file-picker-button disabled" : "file-picker-button"}>
+          <span>Choose file</span>
+          <input
+            aria-label="Dataset file"
+            accept=".csv,.pdf,text/csv,application/pdf"
+            className="hidden-file-input"
+            disabled={uploading}
+            key={fileInputKey}
+            onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+            type="file"
+          />
+        </label>
+        <span className="file-picker-name">{uploadFile?.name ?? "No file selected"}</span>
         <button disabled={uploading} type="submit">
           {uploading ? "Uploading..." : "Upload dataset"}
         </button>

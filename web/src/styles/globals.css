@@ -149,6 +149,55 @@ textarea {
   cursor: pointer;
 }
 
+.toolbar-row input::placeholder {
+  color: #6d7d8d;
+}
+
+.file-picker-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #c9d7e5;
+  border-radius: 6px;
+  color: #172033;
+  background: #fff;
+  cursor: pointer;
+}
+
+.file-picker-button:hover {
+  border-color: #8fb2d5;
+  background: #f8fbfe;
+}
+
+.file-picker-button.disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+.hidden-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.file-picker-name {
+  display: inline-flex;
+  align-items: center;
+  min-width: 160px;
+  max-width: 260px;
+  min-height: 36px;
+  color: #556575;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .data-table {
   display: grid;
   gap: 8px;
