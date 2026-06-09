@@ -184,3 +184,11 @@ data/*_eval_results.csv
 data/*generated_answers*.csv
 reports/
 scripts/eval-cfg.txt
+
+# Frontend workspace
+web/node_modules/
+web/dist/
+web/.vite/
+web/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
