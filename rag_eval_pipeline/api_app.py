@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from rag_eval_pipeline import api
+from rag_eval_pipeline.api_routes import datasets, reports
 from rag_eval_pipeline.api_services.state import ApiState
 
 
@@ -31,6 +32,9 @@ def create_app(
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    app.include_router(reports.router)
+    app.include_router(datasets.router)
 
     @app.get("/api/health")
     def health() -> dict[str, object]:
