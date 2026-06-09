@@ -216,6 +216,51 @@ def test_regenerate_answer_route_returns_answer(monkeypatch, tmp_path):
     assert response.json()["expected_answer"] == "Improved answer"
 
 
+def test_retrieval_chunks_route_returns_chunks(monkeypatch, tmp_path):
+    client = make_client(tmp_path)
+
+    def fake_retrieve_chunks_from_question(
+        question,
+        config_path,
+        *,
+        page_size=None,
+        similarity_threshold=None,
+        dataset_ids=None,
+        document_ids=None,
+        max_passages=None,
+    ):
+        assert question == "What is SM94?"
+        assert config_path.name == "eval-cfg.yaml"
+        assert page_size == 2
+        assert similarity_threshold == 0.2
+        assert dataset_ids == ["ds-1"]
+        assert document_ids == ["doc-1"]
+        assert max_passages == 1
+        return {
+            "ok": True,
+            "question": question,
+            "chunks": [{"id": "[1]", "text": "Retrieved chunk", "source": "chunk-1"}],
+            "retrieval": {"page_size": 2, "similarity_threshold": 0.2},
+        }
+
+    monkeypatch.setattr("rag_eval_pipeline.api.retrieve_chunks_from_question", fake_retrieve_chunks_from_question)
+
+    response = client.post(
+        "/api/retrieval/chunks",
+        json={
+            "question": "What is SM94?",
+            "page_size": 2,
+            "similarity_threshold": 0.2,
+            "dataset_ids": ["ds-1"],
+            "document_ids": ["doc-1"],
+            "max_passages": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["chunks"][0]["text"] == "Retrieved chunk"
+
+
 def test_pipeline_status_route_returns_existing_job(tmp_path):
     jobs = {
         "run-1": {

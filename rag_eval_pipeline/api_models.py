@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ManualQaRequest(BaseModel):
@@ -32,6 +32,15 @@ class RegenerateAnswerRequest(BaseModel):
     current_answer: str
     passages: list[dict[str, Any]]
     language: str = "zh"
+
+
+class RetrievalChunksRequest(BaseModel):
+    question: str
+    page_size: int | None = None
+    similarity_threshold: float | None = None
+    dataset_ids: list[str] = Field(default_factory=list)
+    document_ids: list[str] = Field(default_factory=list)
+    max_passages: int | None = None
 
 
 class PipelineRunRequest(BaseModel):

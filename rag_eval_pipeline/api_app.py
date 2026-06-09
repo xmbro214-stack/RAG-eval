@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from rag_eval_pipeline import api
-from rag_eval_pipeline.api_routes import chat, datasets, pipeline, reports
+from rag_eval_pipeline.api_routes import chat, datasets, pipeline, reports, retrieval
 from rag_eval_pipeline.api_services.state import ApiState
 
 
@@ -35,6 +35,7 @@ def create_app(
 
     app.include_router(reports.router)
     app.include_router(datasets.router)
+    app.include_router(retrieval.router)
     app.include_router(pipeline.router)
     app.include_router(chat.router)
 

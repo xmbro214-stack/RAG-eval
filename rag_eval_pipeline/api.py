@@ -1635,6 +1635,67 @@ def passage_payload(passages: list[Any]) -> list[dict[str, Any]]:
     ]
 
 
+def retrieval_metadata(args: argparse.Namespace) -> dict[str, Any]:
+    from rag_eval_pipeline.generation import parse_csv_list
+
+    return {
+        "url": args.retrieval_url,
+        "dataset_ids": parse_csv_list(args.dataset_ids),
+        "document_ids": parse_csv_list(args.document_ids),
+        "page": args.page,
+        "page_size": args.page_size,
+        "similarity_threshold": args.similarity_threshold,
+        "max_passages": args.max_passages,
+    }
+
+
+def retrieve_chunks_from_question(
+    question: str,
+    config_path: Path = DEFAULT_PIPELINE_CONFIG,
+    *,
+    page_size: int | None = None,
+    similarity_threshold: float | None = None,
+    dataset_ids: list[str] | None = None,
+    document_ids: list[str] | None = None,
+    max_passages: int | None = None,
+) -> dict[str, Any]:
+    from rag_eval_pipeline import generation as rag_generation
+
+    clean_question = question.strip()
+    if not clean_question:
+        raise UploadError("Question is required.")
+
+    args = retrieval_args_from_config(config_path)
+    if page_size is not None:
+        if page_size < 1:
+            raise UploadError("page_size must be >= 1.")
+        args.page_size = page_size
+    if similarity_threshold is not None:
+        args.similarity_threshold = similarity_threshold
+    if dataset_ids:
+        args.dataset_ids = ",".join(str(dataset_id).strip() for dataset_id in dataset_ids if str(dataset_id).strip())
+    if document_ids:
+        args.document_ids = ",".join(str(document_id).strip() for document_id in document_ids if str(document_id).strip())
+    if max_passages is not None:
+        if max_passages < 1:
+            raise UploadError("max_passages must be >= 1.")
+        args.max_passages = max_passages
+    elif args.max_passages < 1:
+        args.max_passages = args.page_size
+
+    query = rag_generation.Query(query_id="retrieval_preview", query=clean_question)
+    retrieval_payload = rag_generation.build_retrieval_payload(args, query)
+    retrieval_headers = rag_generation.build_retrieval_headers(args)
+    retrieval_json = post_retrieval_json(args.retrieval_url, retrieval_payload, retrieval_headers)
+    passages = rag_generation.extract_passages(retrieval_json, args.max_passages)
+    return {
+        "ok": True,
+        "question": clean_question,
+        "chunks": passage_payload(passages),
+        "retrieval": retrieval_metadata(args),
+    }
+
+
 def build_answer_generation_messages(question: str, passages: list[dict[str, Any]], language: str) -> list[dict[str, str]]:
     _code, prompt_language = normalize_response_language(language)
     context = "\n\n".join(

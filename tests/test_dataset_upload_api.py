@@ -2745,6 +2745,60 @@ def test_generate_answer_from_question_rejects_empty_passages(monkeypatch, tmp_p
     assert "passages" in str(exc.value).lower()
 
 
+def test_retrieve_chunks_from_question_calls_retrieval(monkeypatch, tmp_path):
+    config_path = tmp_path / "eval-cfg.yaml"
+    config_path.write_text(
+        "datasets:\n"
+        "  - id: ds-from-config\n"
+        "    name: smoke\n"
+        "grid:\n"
+        "  page_sizes: [5]\n"
+        "  similarity_thresholds: [0.1]\n"
+        "generation:\n"
+        "  retrieval_url: http://retrieval.test/api/v1/retrieval\n"
+        "  retrieval_api_key_env: TEST_RETRIEVAL_API_KEY\n"
+        "  vector_similarity_weight: 0.4\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("TEST_RETRIEVAL_API_KEY", "retrieval-key")
+    captured_retrieval = {}
+
+    def fake_post_json(url, payload, headers, timeout_seconds=30):
+        captured_retrieval.update({"url": url, "payload": payload, "headers": headers})
+        return {
+            "code": 0,
+            "data": {
+                "chunks": [
+                    {"id": "chunk-1", "content": "First retrieved chunk."},
+                    {"id": "chunk-2", "content": "Second retrieved chunk."},
+                ]
+            },
+        }
+
+    monkeypatch.setattr(api, "post_retrieval_json", fake_post_json)
+
+    payload = api.retrieve_chunks_from_question(
+        " What is SM94? ",
+        config_path,
+        page_size=2,
+        similarity_threshold=0.2,
+        dataset_ids=["ds-override"],
+        document_ids=["doc-1"],
+        max_passages=1,
+    )
+
+    assert payload["ok"] is True
+    assert payload["question"] == "What is SM94?"
+    assert payload["chunks"] == [{"id": "[1]", "text": "First retrieved chunk.", "source": "chunk-1"}]
+    assert payload["retrieval"]["page_size"] == 2
+    assert payload["retrieval"]["similarity_threshold"] == 0.2
+    assert captured_retrieval["url"] == "http://retrieval.test/api/v1/retrieval"
+    assert captured_retrieval["payload"]["question"] == "What is SM94?"
+    assert captured_retrieval["payload"]["dataset_ids"] == ["ds-override"]
+    assert captured_retrieval["payload"]["document_ids"] == ["doc-1"]
+    assert captured_retrieval["headers"]["Authorization"] == "Bearer retrieval-key"
+
+
 def test_regenerate_answer_from_passages_calls_chat(monkeypatch, tmp_path):
     config_path = tmp_path / "eval-cfg.yaml"
     config_path.write_text(

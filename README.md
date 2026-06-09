@@ -14,6 +14,7 @@ RAG evaluation console with a FastAPI backend and a React/Vite frontend.
 |   |   |-- chat.py
 |   |   |-- datasets.py
 |   |   |-- pipeline.py
+|   |   |-- retrieval.py
 |   |   `-- reports.py
 |   |-- api_services/           # Shared API state
 |   |-- config.py
@@ -71,6 +72,46 @@ http://127.0.0.1:9000/datasets
 ```
 
 The backend also serves the built React frontend from `web/dist`.
+
+## External Knowledge Base Chunks
+
+The project does not split or embed the external knowledge base. It calls an external retrieval API, configured in `scripts/eval-cfg.yaml`:
+
+```yaml
+generation:
+  retrieval_url: "http://localhost:9380/api/v1/retrieval"
+```
+
+Use the backend wrapper endpoint when callers need to preview retrieved chunks:
+
+```text
+POST http://127.0.0.1:9000/api/retrieval/chunks
+```
+
+Example body:
+
+```json
+{
+  "question": "What is SM94?",
+  "page_size": 5,
+  "similarity_threshold": 0.1,
+  "dataset_ids": ["123"],
+  "document_ids": []
+}
+```
+
+The backend reads retrieval defaults from `scripts/eval-cfg.yaml`, calls the external API, and returns normalized chunks with `id`, `text`, and `source`.
+
+## Environment Variables
+
+Set API keys outside the repository before running generation or evaluation:
+
+```powershell
+$env:RETRIEVAL_API_KEY="..."
+$env:LLM_API_KEY="..."
+$env:EVAL_CHAT_API_KEY="..."
+$env:EMBEDDING_API_KEY="..."
+```
 
 ## Frontend Development Only
 
