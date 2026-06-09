@@ -36,3 +36,43 @@ def test_create_app_datasets_falls_back_to_frontend_when_build_exists(tmp_path):
 
     assert response.status_code == 200
     assert "Console App" in response.text
+
+
+def test_legacy_api_main_runs_uvicorn_with_configured_state(monkeypatch, tmp_path):
+    captured = {}
+    upload_root = tmp_path / "uploads"
+    reports_root = tmp_path / "reports"
+    pipeline_config = tmp_path / "eval-cfg.yaml"
+
+    def fake_run(app, host, port, reload):
+        captured.update({"app": app, "host": host, "port": port, "reload": reload})
+
+    monkeypatch.setattr("uvicorn.run", fake_run)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rag-eval-api",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9100",
+            "--upload-root",
+            str(upload_root),
+            "--reports-root",
+            str(reports_root),
+            "--pipeline-config",
+            str(pipeline_config),
+        ],
+    )
+
+    from rag_eval_pipeline import api
+
+    api.main()
+
+    assert captured["host"] == "127.0.0.1"
+    assert captured["port"] == 9100
+    assert captured["reload"] is False
+    state = captured["app"].state.rag_eval
+    assert state.upload_root == upload_root
+    assert state.reports_root == reports_root
+    assert state.pipeline_config_path == pipeline_config

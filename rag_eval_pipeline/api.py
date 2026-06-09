@@ -7299,19 +7299,19 @@ def load_dotenv_if_available() -> None:
 def main() -> None:
     load_dotenv_if_available()
     args = parse_args()
-    handler_class = make_handler(
-        upload_root=args.upload_root,
-        reports_root=args.reports_root,
-        pipeline_config_path=args.pipeline_config,
+    import uvicorn
+
+    from rag_eval_pipeline.api_app import create_app
+    from rag_eval_pipeline.api_services.state import ApiState
+
+    app = create_app(
+        state=ApiState(
+            upload_root=args.upload_root,
+            reports_root=args.reports_root,
+            pipeline_config_path=args.pipeline_config,
+        )
     )
-    server = ThreadingHTTPServer((args.host, args.port), handler_class)
-    print(f"Dataset upload page: http://{args.host}:{args.port}/datasets")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopping dataset upload API.")
-    finally:
-        server.server_close()
+    uvicorn.run(app, host=args.host, port=args.port, reload=False)
 
 
 if __name__ == "__main__":
