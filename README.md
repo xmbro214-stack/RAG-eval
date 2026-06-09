@@ -26,10 +26,11 @@ RAG evaluation console with a FastAPI backend and a React/Vite frontend.
 |   |-- src/
 |   |   |-- api/                # Typed API client and frontend types
 |   |   |-- components/         # Shared console components
-|   |   |-- pages/              # Datasets, Reports, Runs, Evaluation pages
+|   |   |-- pages/              # Datasets, Run, Records, Reports, Overview pages
 |   |   |-- styles/
 |   |   `-- App.tsx
 |   |-- package.json
+|   |-- README.md
 |   `-- vite.config.ts
 |-- scripts/                    # Pipeline, mock service, and helper scripts
 |-- tests/                      # Python test suite
@@ -87,6 +88,7 @@ http://127.0.0.1:5173
 ```
 
 Vite shows the same app and proxies API calls to the backend on port `9000`.
+See `web/README.md` for frontend-specific commands and structure.
 
 ## Build Frontend For Backend Serving
 
