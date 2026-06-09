@@ -8,7 +8,7 @@ type JobRailProps = {
 export function JobRail({ job }: JobRailProps) {
   const status = job?.status || "Idle";
   const progress = job?.progress?.percent ?? 0;
-  const latestLog = job?.log_tail?.at(-1) || "No background job is running.";
+  const latestLog = job?.log_tail?.[job.log_tail.length - 1] || "No background job is running.";
 
   return (
     <aside className="job-rail" aria-label="Job status">
