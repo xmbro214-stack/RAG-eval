@@ -214,3 +214,98 @@ def test_regenerate_answer_route_returns_answer(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     assert response.json()["expected_answer"] == "Improved answer"
+
+
+def test_pipeline_status_route_returns_existing_job(tmp_path):
+    jobs = {
+        "run-1": {
+            "run_id": "run-1",
+            "status": "running",
+            "log_tail": ["started"],
+            "expected_tasks": 2,
+            "entries": [{"evaluation_status": "completed"}, {"evaluation_status": "running"}],
+        }
+    }
+    client = make_client(tmp_path, pipeline_jobs=jobs)
+
+    response = client.get("/api/pipeline/status", params={"run_id": "run-1"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["job"]["run_id"] == "run-1"
+    assert payload["job"]["progress"]["total_tasks"] == 2
+
+
+def test_pipeline_status_route_rejects_missing_job(tmp_path):
+    client = make_client(tmp_path, pipeline_jobs={})
+
+    response = client.get("/api/pipeline/status", params={"run_id": "missing"})
+
+    assert response.status_code == 404
+    assert response.json()["ok"] is False
+
+
+def test_pipeline_run_route_delegates_to_start_job(monkeypatch, tmp_path):
+    client = make_client(tmp_path)
+
+    def fake_start_pipeline_job(config_path, stage, dry_run, overwrite, job_store):
+        assert stage == "all"
+        assert dry_run is False
+        assert overwrite is True
+        return {"ok": True, "run_id": "run-1", "status": "starting"}
+
+    monkeypatch.setattr("rag_eval_pipeline.api.check_pipeline_retrieval_service", lambda config_path: None)
+    monkeypatch.setattr("rag_eval_pipeline.api.start_pipeline_job", fake_start_pipeline_job)
+
+    response = client.post("/api/pipeline/run", json={"mode": "standard", "stage": "all"})
+
+    assert response.status_code == 200
+    assert response.json()["run_id"] == "run-1"
+
+
+def test_pipeline_cancel_route_delegates_to_cancel_job(monkeypatch, tmp_path):
+    client = make_client(tmp_path, pipeline_jobs={"run-1": {"run_id": "run-1", "status": "running"}})
+
+    def fake_cancel_pipeline_job(run_id, job_store):
+        assert run_id == "run-1"
+        assert "run-1" in job_store
+        return {"ok": True, "run_id": run_id, "status": "cancelling"}
+
+    monkeypatch.setattr("rag_eval_pipeline.api.cancel_pipeline_job", fake_cancel_pipeline_job)
+
+    response = client.post("/api/pipeline/cancel", json={"run_id": "run-1"})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelling"
+
+
+def test_chat_route_delegates_to_answer_chat_question(monkeypatch, tmp_path):
+    client = make_client(tmp_path)
+
+    def fake_answer_chat_question(question, report_url, reports_root, language):
+        assert question == "What changed?"
+        assert report_url == "/reports/smoke.html"
+        assert language == "en"
+        return {"answer": "Recall improved."}
+
+    monkeypatch.setattr("rag_eval_pipeline.api.answer_chat_question", fake_answer_chat_question)
+
+    response = client.post(
+        "/api/chat",
+        json={"question": "What changed?", "report_url": "/reports/smoke.html", "language": "en"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "Recall improved."
+
+
+def test_chat_save_route_writes_supplement(tmp_path):
+    client = make_client(tmp_path)
+
+    response = client.post("/api/chat/save", json={"question": "What changed?", "answer": "Recall improved."})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["supplemental_query_id"] == "query_1"
