@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urljoin
@@ -108,7 +110,7 @@ def run_smoke_checks(
 
     page_html = client.get_text("/datasets")
     _require_console_page(page_html)
-    results.append(CheckResult("console page", True, "required UI hooks are present"))
+    results.append(CheckResult("console page", True, "React shell and assets are present"))
 
     datasets_payload = client.get_json("/api/datasets")
     datasets = _require_datasets_payload(datasets_payload)
@@ -131,32 +133,24 @@ def run_smoke_checks(
         upload_payload = _check_dataset_upload(client)
         results.append(CheckResult("dataset upload", True, upload_payload["path"]))
 
-        manual_payload = _check_manual_qa_save(client, str(upload_payload["path"]))
-        results.append(CheckResult("manual QA save", True, f"rows={manual_payload.get('rows', '?')}"))
+        try:
+            manual_payload = _check_manual_qa_save(client, str(upload_payload["path"]))
+            results.append(CheckResult("manual QA save", True, f"rows={manual_payload.get('rows', '?')}"))
+        finally:
+            _cleanup_uploaded_smoke_dataset(str(upload_payload["path"]))
 
     return results
 
 
 def _require_console_page(page_html: str) -> None:
-    required_snippets = [
-        'class="overview-summary-grid"',
-        'class="overview-activity-strip"',
-        'id="manualQaForm"',
-        'id="generateAnswerButton"',
-        'id="manualQaQuestionTextarea"',
-        'id="manualQaAnswerTextarea"',
-        'class="run-control-grid"',
-        'id="reportFrame"',
-        'fetch("/api/datasets/generate-answer"',
-        'fetch("/api/datasets/regenerate-answer"',
-        'fetch("/api/datasets/manual-qa"',
-        'fetch("/api/chat"',
-    ]
-    for snippet in required_snippets:
-        if snippet not in page_html:
-            raise CheckFailure(f"console page is missing required hook: {snippet}")
-    if 'fetch("/api/chat/save"' in page_html:
-        raise CheckFailure("console page still calls /api/chat/save from the report question panel")
+    if "RAG Evaluation Console" not in page_html:
+        raise CheckFailure("console page is missing the RAG Evaluation Console title")
+    if not re.search(r"<div\s+[^>]*id=[\"']root[\"']", page_html):
+        raise CheckFailure("console page is missing the React root")
+    if not re.search(r"<script\s+[^>]*type=[\"']module[\"'][^>]*src=[\"']/assets/[^\"']+\.js[\"']", page_html):
+        raise CheckFailure("console page is missing the React JavaScript asset")
+    if not re.search(r"<link\s+[^>]*href=[\"']/assets/[^\"']+\.css[\"']", page_html):
+        raise CheckFailure("console page is missing the React stylesheet asset")
 
 
 def _require_datasets_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -232,6 +226,16 @@ def _check_manual_qa_save(client: Any, target_dataset: str) -> dict[str, Any]:
     if not payload.get("path"):
         raise CheckFailure("/api/datasets/manual-qa returned no dataset path")
     return payload
+
+
+def _cleanup_uploaded_smoke_dataset(upload_path: str) -> None:
+    path = Path(upload_path)
+    if path.is_absolute():
+        target = path
+    else:
+        target = Path.cwd() / path
+    if target.name.startswith("functional_smoke_") and target.suffix.lower() == ".csv":
+        target.unlink(missing_ok=True)
 
 
 def _build_multipart_body(

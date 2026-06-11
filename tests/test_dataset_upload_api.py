@@ -2,7 +2,8 @@ import io
 import json
 import logging
 import re
-from datetime import datetime
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -1414,6 +1415,7 @@ def test_list_eval_runs_reads_pipeline_manifests(tmp_path):
             "eval_result_url": f"/eval-output?path={quote(api.relative_repo_path(eval_csv), safe='')}",
             "report_path": "",
             "report_url": "",
+            "report_modified": "",
             "combo": "ps5_sim0p1",
         }
     ]
@@ -1442,7 +1444,10 @@ def test_list_eval_runs_includes_matching_report_link(tmp_path):
     eval_csv = run_root / "custom" / "ps5_sim0p1" / "eval_result.csv"
     eval_csv.parent.mkdir(parents=True)
     eval_csv.write_text("query_id\nq1\n", encoding="utf-8")
-    (reports_root / "ragflow_standard_eval.html").write_text("<html>report</html>", encoding="utf-8")
+    report_path = reports_root / "ragflow_standard_eval.html"
+    report_path.write_text("<html>report</html>", encoding="utf-8")
+    report_timestamp = datetime(2026, 6, 9, 4, 34, tzinfo=timezone.utc).timestamp()
+    os.utime(report_path, (report_timestamp, report_timestamp))
     (run_root / "manifest.json").write_text(
         json.dumps(
             {
@@ -1464,8 +1469,52 @@ def test_list_eval_runs_includes_matching_report_link(tmp_path):
 
     runs = api.list_eval_runs(eval_runs_root, reports_root=reports_root)
 
-    assert runs[0]["report_path"] == api.relative_repo_path(reports_root / "ragflow_standard_eval.html")
+    assert runs[0]["report_path"] == api.relative_repo_path(report_path)
     assert runs[0]["report_url"].startswith("/reports/ragflow_standard_eval.html?v=")
+    assert runs[0]["report_modified"] == "2026-06-09 12:34"
+
+
+def test_list_eval_runs_formats_report_modified_as_beijing_time(tmp_path):
+    eval_runs_root = tmp_path / "eval_runs"
+    reports_root = tmp_path / "reports"
+    run_root = eval_runs_root / "ragflow_quick"
+    reports_root.mkdir(parents=True)
+    run_root.mkdir(parents=True)
+    eval_csv = run_root / "custom" / "ps1_sim0p1" / "eval_result.csv"
+    eval_csv.parent.mkdir(parents=True)
+    eval_csv.write_text("query_id\nq1\n", encoding="utf-8")
+    report_path = reports_root / "ragflow_quick_eval.html"
+    report_path.write_text("<html>report</html>", encoding="utf-8")
+    report_timestamp = datetime(2026, 6, 11, 5, 0, 56, tzinfo=timezone.utc).timestamp()
+    os.utime(report_path, (report_timestamp, report_timestamp))
+    (run_root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "updated_at": "2026-06-11T05:00:56+0000",
+                "tasks": [
+                    {
+                        "dataset_name": "custom",
+                        "page_size": 1,
+                        "similarity_threshold": 0.1,
+                        "generation_status": "completed",
+                        "evaluation_status": "completed",
+                        "eval_result_csv": str(eval_csv),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    runs = api.list_eval_runs(eval_runs_root, reports_root=reports_root)
+
+    assert runs[0]["report_modified"] == "2026-06-11 13:00"
+
+
+def test_format_beijing_timestamp_converts_utc_epoch_to_beijing_clock():
+    timestamp = datetime(2026, 6, 11, 5, 0, 56, tzinfo=timezone.utc).timestamp()
+
+    assert api.format_beijing_timestamp(timestamp) == "2026-06-11 13:00"
 
 
 def test_default_upload_root_matches_documented_dataset_path():
@@ -2073,6 +2122,38 @@ def test_create_quick_pipeline_config_limits_matrix_and_repeat_query(tmp_path, m
     quick_rows = Path(quick_config["queries_csv"]).read_text(encoding="utf-8").splitlines()
     assert quick_rows == rows[:11]
     assert quick_config["golden_csv"] == quick_config["queries_csv"]
+
+
+def test_create_quick_pipeline_config_uses_mock_openai_environment_override(tmp_path, monkeypatch):
+    queries_csv = tmp_path / "qa_golden.csv"
+    queries_csv.write_text("query_id,query,expected_answer\nq1,a,b\n", encoding="utf-8")
+    base_config = tmp_path / "eval-cfg.yaml"
+    base_config.write_text(
+        json.dumps(
+            {
+                "queries_csv": str(queries_csv),
+                "golden_csv": str(queries_csv),
+                "output": {"root": "data/eval_runs", "run_name": "ragflow_grid"},
+                "datasets": [{"id": "123", "name": "custom"}],
+                "grid": {"page_sizes": [5], "similarity_thresholds": [0.1]},
+                "generation": {"llm_base_url": "https://real-llm/v1"},
+                "evaluation": {
+                    "chat_base_url": "https://real-judge/v1",
+                    "embedding_base_url": "https://real-embed/v1",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "QUICK_PIPELINE_CONFIG_ROOT", tmp_path / "server-configs")
+    monkeypatch.setenv("RAG_EVAL_MOCK_OPENAI_BASE_URL", "http://mock-openai:8011/v1")
+
+    quick_config_path = api.create_quick_pipeline_config(base_config, "run-mock")
+    quick_config = json.loads(quick_config_path.read_text(encoding="utf-8"))
+
+    assert quick_config["generation"]["llm_base_url"] == "http://mock-openai:8011/v1"
+    assert quick_config["evaluation"]["chat_base_url"] == "http://mock-openai:8011/v1"
+    assert quick_config["evaluation"]["embedding_base_url"] == "http://mock-openai:8011/v1"
 
 
 def test_create_standard_pipeline_config_preserves_full_matrix_and_real_models(tmp_path, monkeypatch):
@@ -2703,6 +2784,20 @@ def test_generate_answer_from_question_calls_retrieval_and_chat(monkeypatch, tmp
     assert captured_retrieval["payload"]["question"] == "What is SM94 M3?"
     assert captured_retrieval["headers"]["Authorization"] == "Bearer retrieval-key"
     assert "retrieved passages" in captured_messages[-1]["content"].lower()
+
+
+def test_retrieval_args_prefers_environment_url_override(monkeypatch, tmp_path):
+    config_path = tmp_path / "eval-cfg.yaml"
+    config_path.write_text(
+        "generation:\n"
+        "  retrieval_url: http://127.0.0.1:9380/api/v1/retrieval\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("RAG_EVAL_RETRIEVAL_URL", "http://retrieval:9380/api/v1/retrieval")
+
+    args = api.retrieval_args_from_config(config_path)
+
+    assert args.retrieval_url == "http://retrieval:9380/api/v1/retrieval"
 
 
 def test_generate_answer_from_question_rejects_empty_question(tmp_path):

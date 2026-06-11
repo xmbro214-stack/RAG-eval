@@ -70,6 +70,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/superpowers/
 
 # PyBuilder
 .pybuilder/
@@ -173,6 +174,7 @@ data/**
 !data/
 !data/.gitkeep
 !data/qa_golden.csv
+!data/sample_chunks.jsonl
 data/local_eval_results.csv
 data/local_eval_results_no_answer.csv
 data/recall_metrics_summary.csv
@@ -184,6 +186,8 @@ data/*_eval_results.csv
 data/*generated_answers*.csv
 reports/
 scripts/eval-cfg.txt
+*.out.log
+*.err.log
 
 # Frontend workspace
 web/node_modules/

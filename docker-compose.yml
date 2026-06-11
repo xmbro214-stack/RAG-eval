@@ -1,23 +1,137 @@
+name: rag-eval
+
 services:
-  rag-eval-dev:
-    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
-    container_name: rag-eval-dev
-    user: "0:0"
-    working_dir: /workspace
-    volumes:
-      - .:/workspace:z
-      - uv-cache:/root/.cache/uv
+  retrieval:
+    image: rag-eval-backend:python3.12-slim
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-eval-retrieval
+    restart: unless-stopped
+    command:
+      [
+        "python",
+        "scripts/local_chunks_retrieval_server.py",
+        "--config",
+        "scripts/eval-cfg.yaml",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "9380",
+      ]
     environment:
       PYTHONUNBUFFERED: "1"
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://mock-openai:8011/v1}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-EMPTY}
+    volumes:
+      - ./data:/app/data
+      - ./scripts/eval-cfg.yaml:/app/scripts/eval-cfg.yaml:ro
+    ports:
+      - "9380:9380"
+    depends_on:
+      mock-openai:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:9380/', timeout=5)); raise SystemExit(0 if data.get('status') == 'ok' else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  mock-openai:
+    image: rag-eval-backend:python3.12-slim
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-eval-mock-openai
+    restart: unless-stopped
+    command:
+      [
+        "python",
+        "scripts/mock_openai_server.py",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8011",
+      ]
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8011:8011"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8011/', timeout=5)); raise SystemExit(0 if data.get('status') == 'ok' else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  backend:
+    image: rag-eval-backend:python3.12-slim
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-eval-backend
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+      RAG_EVAL_RETRIEVAL_URL: http://retrieval:9380/api/v1/retrieval
+      RAG_EVAL_MOCK_OPENAI_BASE_URL: http://mock-openai:8011/v1
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://mock-openai:8011/v1}
+      RETRIEVAL_API_KEY: ${RETRIEVAL_API_KEY:-EMPTY}
+      LLM_API_KEY: ${LLM_API_KEY:-EMPTY}
+      EVAL_CHAT_BASE_URL: ${EVAL_CHAT_BASE_URL:-http://mock-openai:8011/v1}
+      EVAL_CHAT_API_KEY: ${EVAL_CHAT_API_KEY:-EMPTY}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://mock-openai:8011/v1}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-EMPTY}
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./scripts/eval-cfg.yaml:/app/scripts/eval-cfg.yaml:ro
+    ports:
+      - "9000:9000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: >
-      bash -lc "python --version &&
-      uv --version &&
-      echo 'Container is ready. Run: docker compose exec rag-eval-dev bash' &&
-      tail -f /dev/null"
-    stdin_open: true
-    tty: true
+    depends_on:
+      retrieval:
+        condition: service_healthy
+      mock-openai:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:9000/api/health', timeout=5)); raise SystemExit(0 if data.get('ok') else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
-volumes:
-  uv-cache:
+  frontend:
+    image: rag-eval-frontend:nginx-1.29.8
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    container_name: rag-eval-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"

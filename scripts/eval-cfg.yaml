@@ -1,5 +1,5 @@
-queries_csv: data/qa_golden_2.csv
-golden_csv: data/qa_golden_2.csv
+queries_csv: data/qa_golden.csv
+golden_csv: data/qa_golden.csv
 
 output:
   root: data/eval_runs
@@ -10,6 +10,13 @@ output:
 logging:
   # INFO keeps task progress and request metadata; DEBUG adds HTTP payload summaries.
   level: INFO
+
+local_retrieval:
+  # Small repository sample. Replace with your generated chunks JSONL for real evaluations.
+  chunks_path: data/sample_chunks.jsonl
+  cache_path: data/local_chunks.index.jsonl
+  batch_size: 10
+  rebuild: false
 
 datasets:
   - id: "123"
@@ -22,7 +29,7 @@ grid:
   similarity_thresholds: [0.1, 0.2]
 
 generation:
-  retrieval_url: "http://localhost:9380/api/v1/retrieval"
+  retrieval_url: "http://127.0.0.1:9380/api/v1/retrieval"
   retrieval_api_key_env: RETRIEVAL_API_KEY
   top_k: 1024
   rerank_id: ""
@@ -31,18 +38,18 @@ generation:
   max_workers: 1
   timeout: 120
   retries: 2
-  llm_base_url: "https://token-plan-cn.xiaomimimo.com/v1"
+  llm_base_url_env: LLM_BASE_URL
   llm_api_key_env: LLM_API_KEY
-  llm_model: "mimo-v2.5-pro"
+  llm_model: "your-chat-model"
   max_tokens: 4096
 
 evaluation:
-  chat_base_url: "https://token-plan-cn.xiaomimimo.com/v1"
+  chat_base_url_env: EVAL_CHAT_BASE_URL
   chat_api_key_env: EVAL_CHAT_API_KEY
-  chat_model: "mimo-v2.5-pro"
-  embedding_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  chat_model: "your-chat-model"
+  embedding_base_url_env: EMBEDDING_BASE_URL
   embedding_api_key_env: EMBEDDING_API_KEY
-  embedding_model: "text-embedding-v4"
+  embedding_model: "your-embedding-model"
   k_values: "1,3,5"
   max_workers: 1
   timeout: 60

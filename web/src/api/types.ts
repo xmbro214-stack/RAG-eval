@@ -26,6 +26,7 @@ export type EvalRunItem = {
   page_size?: number;
   similarity_threshold?: number;
   report_url?: string;
+  report_modified?: string;
   [key: string]: unknown;
 };
 
@@ -45,10 +46,37 @@ export type PipelineJob = {
   error?: string;
 };
 
+export type PipelineRunOptions = {
+  datasets?: string[];
+  page_sizes?: number[];
+  similarity_thresholds?: number[];
+};
+
 export type DatasetPreview = {
   ok: true;
   rows: number;
   preview_rows: Array<Record<string, string>>;
+};
+
+export type RetrievedPassage = {
+  id?: string;
+  text?: string;
+  content?: string;
+  source?: string;
+  score?: number;
+  [key: string]: unknown;
+};
+
+export type GenerateAnswerResponse = {
+  ok: true;
+  question: string;
+  expected_answer: string;
+  passages: RetrievedPassage[];
+};
+
+export type RegenerateAnswerResponse = {
+  ok: true;
+  expected_answer: string;
 };
 
 export type DatasetUploadResponse = {

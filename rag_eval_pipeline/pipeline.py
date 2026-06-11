@@ -152,6 +152,14 @@ def add_optional_arg(command: list[str], flag: str, value: Any) -> None:
         command.extend([flag, str(value)])
 
 
+def retrieval_url_from_generation_config(generation: dict[str, Any]) -> str:
+    return str(
+        os.getenv("RAG_EVAL_RETRIEVAL_URL")
+        or config_value(generation, "retrieval_url")
+        or ""
+    )
+
+
 def build_generation_command(config: dict[str, Any], task: PipelineTask) -> list[str]:
     generation = config.get("generation") or {}
     log_level = config_value(generation, "log_level", default=config_value(config.get("logging") or {}, "level"))
@@ -169,7 +177,7 @@ def build_generation_command(config: dict[str, Any], task: PipelineTask) -> list
         "--similarity-threshold",
         str(task.similarity_threshold),
         "--retrieval-url",
-        str(config_value(generation, "retrieval_url")),
+        retrieval_url_from_generation_config(generation),
         "--llm-base-url",
         str(config_value(generation, "llm_base_url")),
         "--llm-api-key",

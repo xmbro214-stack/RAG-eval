@@ -3,9 +3,13 @@ import type {
   DatasetPreview,
   DatasetUploadResponse,
   EvalRunItem,
+  GenerateAnswerResponse,
   ManualQaSaveResponse,
   PipelineJob,
+  PipelineRunOptions,
+  RegenerateAnswerResponse,
   ReportItem,
+  RetrievedPassage,
   RunOptions
 } from "./types";
 
@@ -55,11 +59,11 @@ export const apiClient = {
     return payload.job;
   },
 
-  async runPipeline(mode: "quick" | "standard"): Promise<{ run_id: string; status: string }> {
+  async runPipeline(mode: "quick" | "standard", options: PipelineRunOptions = {}): Promise<{ run_id: string; status: string }> {
     return requestJson<{ ok: true; run_id: string; status: string }>("/api/pipeline/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode, stage: "all" })
+      body: JSON.stringify({ mode, stage: "all", ...options })
     });
   },
 
@@ -68,6 +72,32 @@ export const apiClient = {
     body.set("name", name);
     body.set("file", file);
     return requestJson<DatasetUploadResponse>("/api/datasets/upload", { method: "POST", body });
+  },
+
+  async generateAnswer(question: string, language = "zh"): Promise<GenerateAnswerResponse> {
+    return requestJson<GenerateAnswerResponse>("/api/datasets/generate-answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, language })
+    });
+  },
+
+  async regenerateAnswer(
+    question: string,
+    currentAnswer: string,
+    passages: RetrievedPassage[],
+    language = "zh"
+  ): Promise<RegenerateAnswerResponse> {
+    return requestJson<RegenerateAnswerResponse>("/api/datasets/regenerate-answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        current_answer: currentAnswer,
+        passages,
+        language
+      })
+    });
   },
 
   async saveManualQa(

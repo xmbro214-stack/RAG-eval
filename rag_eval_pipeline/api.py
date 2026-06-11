@@ -16,7 +16,7 @@ import urllib.error
 import urllib.request
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -36,6 +36,7 @@ MOCK_OPENAI_API_KEY = "EMPTY"
 MOCK_CHAT_MODEL = "mock-chat"
 MOCK_EMBEDDING_MODEL = "mock-embedding"
 STANDARD_PIPELINE_COMMAND_TIMEOUT_SECONDS = 3600
+BEIJING_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
 REQUIRED_COLUMNS = ("query_id", "query", "expected_answer")
 LANGUAGE_OPTIONS = (
     ("de", "德语", "German"),
@@ -59,6 +60,10 @@ QA_LABEL_RE = re.compile(
     r"^\s*(?:\d+[.)、]\s*)?(?P<label>q|question|问题|a|answer|答案|回答)\s*[:：]\s*(?P<text>.*)$",
     re.IGNORECASE,
 )
+
+
+def format_beijing_timestamp(timestamp: float) -> str:
+    return datetime.fromtimestamp(timestamp, tz=BEIJING_TIMEZONE).strftime("%Y-%m-%d %H:%M")
 
 
 class UploadError(ValueError):
@@ -430,7 +435,8 @@ def apply_server_pipeline_overrides(config: dict[str, Any], *, run_name: str) ->
     }
 
     generation = dict(config.get("generation") or {})
-    generation["llm_base_url"] = MOCK_OPENAI_BASE_URL
+    mock_openai_base_url = mock_openai_base_url_from_env()
+    generation["llm_base_url"] = mock_openai_base_url
     generation["llm_api_key"] = MOCK_OPENAI_API_KEY
     generation["llm_model"] = MOCK_CHAT_MODEL
     generation["repeat_query"] = 1
@@ -441,10 +447,10 @@ def apply_server_pipeline_overrides(config: dict[str, Any], *, run_name: str) ->
     config["generation"] = generation
 
     evaluation = dict(config.get("evaluation") or {})
-    evaluation["chat_base_url"] = MOCK_OPENAI_BASE_URL
+    evaluation["chat_base_url"] = mock_openai_base_url
     evaluation["chat_api_key"] = MOCK_OPENAI_API_KEY
     evaluation["chat_model"] = MOCK_CHAT_MODEL
-    evaluation["embedding_base_url"] = MOCK_OPENAI_BASE_URL
+    evaluation["embedding_base_url"] = mock_openai_base_url
     evaluation["embedding_api_key"] = MOCK_OPENAI_API_KEY
     evaluation["embedding_model"] = MOCK_EMBEDDING_MODEL
     evaluation["k_values"] = "1"
@@ -452,6 +458,10 @@ def apply_server_pipeline_overrides(config: dict[str, Any], *, run_name: str) ->
     evaluation["timeout"] = 30
     evaluation["retries"] = 0
     config["evaluation"] = evaluation
+
+
+def mock_openai_base_url_from_env() -> str:
+    return os.getenv("RAG_EVAL_MOCK_OPENAI_BASE_URL") or MOCK_OPENAI_BASE_URL
 
 
 def normalize_selected_datasets(value: Any) -> list[str]:
@@ -546,7 +556,7 @@ def check_pipeline_retrieval_service(config_path: Path, timeout_seconds: float =
     from rag_eval_pipeline.config import load_config
 
     config = load_config(config_path)
-    retrieval_url = str((config.get("generation") or {}).get("retrieval_url") or "").strip()
+    retrieval_url = retrieval_url_from_generation_config(config.get("generation") or {})
     if not retrieval_url:
         return "召回服务地址为空：请在配置文件中填写 generation.retrieval_url。"
     parsed = urlparse(retrieval_url)
@@ -562,6 +572,14 @@ def check_pipeline_retrieval_service(config_path: Path, timeout_seconds: float =
             f"请启动 retrieval 服务，或修改 scripts/eval-cfg.yaml 中的 generation.retrieval_url。"
             f"底层错误：{exc}"
         )
+
+
+def retrieval_url_from_generation_config(generation: dict[str, Any]) -> str:
+    return str(
+        os.getenv("RAG_EVAL_RETRIEVAL_URL")
+        or generation.get("retrieval_url")
+        or ""
+    ).strip()
 
 
 def create_quick_pipeline_config(
@@ -837,8 +855,21 @@ def list_datasets(
 
     default_golden_path = GOLDEN_CSV_PATH.resolve()
     should_offer_default_golden = config_path.resolve() == DEFAULT_PIPELINE_CONFIG.resolve()
+    known_default_entries = {
+        (
+            str(dataset.get("name") or ""),
+            str(dataset.get("dataset_id") or ""),
+            str(dataset.get("path") or ""),
+        )
+        for dataset in datasets
+    }
     default_golden_relative_path = relative_repo_path(default_golden_path)
-    if should_offer_default_golden and default_golden_path.is_file():
+    default_golden_entry_key = (default_golden_path.stem, "", default_golden_relative_path)
+    if (
+        should_offer_default_golden
+        and default_golden_path.is_file()
+        and default_golden_entry_key not in known_default_entries
+    ):
         datasets.append(
             {
                 "name": default_golden_path.stem,
@@ -897,10 +928,12 @@ def list_eval_runs(eval_runs_root: Path = EVAL_RUNS_ROOT, reports_root: Path = R
         updated_at = str(manifest.get("updated_at") or "")
         report_path = reports_root / f"{safe_run_id(run_name)}_eval.html"
         if report_path.is_file():
-            report_modified = int(report_path.stat().st_mtime)
-            report_url = f"/reports/{quote(report_path.name)}?v={report_modified}"
+            report_timestamp = report_path.stat().st_mtime
+            report_modified = format_beijing_timestamp(report_timestamp)
+            report_url = f"/reports/{quote(report_path.name)}?v={int(report_timestamp)}"
             report_relative_path = relative_repo_path(report_path)
         else:
+            report_modified = ""
             report_url = ""
             report_relative_path = ""
         for task in tasks:
@@ -924,6 +957,7 @@ def list_eval_runs(eval_runs_root: Path = EVAL_RUNS_ROOT, reports_root: Path = R
                     "eval_result_url": eval_output_url(eval_csv) if eval_csv is not None else "",
                     "report_path": report_relative_path,
                     "report_url": report_url,
+                    "report_modified": report_modified,
                     "combo": combo_from_entry(task),
                 }
             )
@@ -1260,7 +1294,7 @@ def list_result_reports(reports_root: Path = REPORTS_ROOT) -> list[dict[str, str
                 "name": report_path.name,
                 "path": relative_repo_path(report_path),
                 "url": f"/reports/{quote(report_path.name)}?v={int(modified_timestamp)}",
-                "modified": datetime.fromtimestamp(modified_timestamp).strftime("%Y-%m-%d %H:%M"),
+                "modified": format_beijing_timestamp(modified_timestamp),
             }
         )
     return sorted(reports, key=lambda item: (item["modified"], item["name"]), reverse=True)
@@ -1592,7 +1626,7 @@ def retrieval_args_from_config(config_path: Path) -> argparse.Namespace:
     config = load_pipeline_config(config_path)
     generation = dict(config.get("generation") or {})
     grid = dict(config.get("grid") or {})
-    retrieval_url = str(generation.get("retrieval_url") or "").strip()
+    retrieval_url = retrieval_url_from_generation_config(generation)
     if not retrieval_url:
         raise UploadError("Retrieval URL is required: set generation.retrieval_url.")
     page_size = int(first_number(generation.get("page_size") or grid.get("page_sizes"), 5))
@@ -2993,27 +3027,27 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
   <title>AT&amp;S RAG Evaluation Console</title>
   <style>
     :root {{
-      --ats-blue: #004b93;
-      --ats-blue-dark: #003b74;
-      --ats-blue-deep: #002f5f;
-      --ats-blue-soft: #eaf3fb;
-      --ats-cyan: #00a7c8;
-      --ats-teal: #00a7c8;
-      --ats-blue-50: #f6f9fd;
-      --ats-blue-100: #edf4fb;
-      --ats-blue-200: #d8e4f0;
-      --ats-blue-300: #b7cce1;
-      --ats-blue-700: #005bac;
-      --ink: #0b2540;
-      --muted: #526b86;
-      --line: #d8e4f0;
+      --ats-blue: #176f95;
+      --ats-blue-dark: #0b4f6c;
+      --ats-blue-deep: #08384c;
+      --ats-blue-soft: #e6f5fa;
+      --ats-cyan: #1aa6c8;
+      --ats-teal: #1aa6c8;
+      --ats-blue-50: #f2fbfd;
+      --ats-blue-100: #e6f5fa;
+      --ats-blue-200: #c6dce5;
+      --ats-blue-300: #8fbfd1;
+      --ats-blue-700: #176f95;
+      --ink: #0d3445;
+      --muted: #4f6f7c;
+      --line: #c6dce5;
       --surface: #ffffff;
       --bg: #f2fbfd;
       --paper: #fbfdff;
       --shadow-soft: 0 14px 36px rgba(8, 56, 76, 0.11);
       --error: #b3261e;
-      --success: #207c50;
-      --warning: #9a6b00;
+      --success: #176f95;
+      --warning: #176f95;
     }}
 
     * {{ box-sizing: border-box; }}
@@ -3080,7 +3114,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       height: 100vh;
       padding: 18px 12px;
       color: #ffffff;
-      background: linear-gradient(135deg, var(--ats-blue-dark), var(--ats-blue));
+      background: linear-gradient(180deg, var(--ats-blue-deep), var(--ats-blue-dark) 54%, var(--ats-blue));
       border-right: 1px solid rgba(255, 255, 255, .12);
       display: flex;
       flex-direction: column;
@@ -3111,13 +3145,13 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     .nav-button {{
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       width: 100%;
       min-height: 40px;
       border: 0;
       border-radius: 6px;
       padding: 9px 11px;
-      text-align: center;
+      text-align: left;
       color: #dbeeff;
       background: transparent;
       box-shadow: none;
@@ -3218,7 +3252,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       justify-self: center;
       padding: 20px;
       border: 1px solid var(--line);
-      border-top: 4px solid var(--ats-cyan);
+      border-top: 3px solid var(--ats-cyan);
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.98);
       box-shadow: var(--shadow-soft);
@@ -3544,17 +3578,17 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     }}
 
     .dataset-section-stack {{
-      --qa-surface: #f6f9fd;
+      --qa-surface: var(--ats-blue-50);
       --qa-surface-strong: var(--ats-blue-100);
       --qa-border: rgba(216, 228, 240, .9);
       --qa-border-solid: #d8e4f0;
       --qa-accent: var(--ats-blue-700);
       --qa-accent-soft: #eef6ff;
       --qa-amber: var(--ats-blue-700);
-      --qa-card-radius: 16px;
-      --qa-button-radius: 10px;
+      --qa-card-radius: 8px;
+      --qa-button-radius: 8px;
       --qa-control-height: 44px;
-      --qa-control-radius: 10px;
+      --qa-control-radius: 8px;
       --qa-primary-action-width: 150px;
       --qa-primary-action-height: 52px;
       --qa-shadow: 0 10px 26px rgba(30, 49, 68, .08);
@@ -3585,7 +3619,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       gap: 18px;
       min-width: 0;
       padding: 20px 24px 24px;
-      background: #f6f9fd;
+      background: transparent;
     }}
 
     .dataset-flow-card {{
@@ -3648,7 +3682,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       font-weight: 900;
       line-height: 1;
       flex: 0 0 auto;
-      box-shadow: 0 6px 14px rgba(0, 75, 147, .10);
+      box-shadow: 0 6px 14px rgba(23, 111, 149, .13);
     }}
 
     .dataset-inventory-header {{
@@ -3805,7 +3839,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       min-height: var(--qa-primary-action-height);
       height: var(--qa-primary-action-height);
       color: #ffffff;
-      background: #005bac;
+      background: var(--ats-blue-700);
       border: 1px solid var(--ats-blue-700);
       border-radius: var(--qa-control-radius);
       box-shadow: 0 8px 18px rgba(0, 91, 172, .16);
@@ -4238,31 +4272,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       max-width: none;
     }}
 
-    .dataset-save-info-card {{
-      display: grid;
-      grid-template-columns: 22px minmax(0, 1fr);
-      gap: 12px;
-      align-items: center;
-      min-width: 0;
-      min-height: 52px;
-      padding: 8px 14px;
-      border: 1px solid rgba(183, 204, 225, .72);
-      border-radius: 12px;
-      background: #f8fbff;
-    }}
-
-    .dataset-save-state-dot {{
-      display: inline-grid;
-      place-items: center;
-      width: 22px;
-      height: 22px;
-      border-radius: 999px;
-      color: var(--ats-blue);
-      background: #eef6ff;
-      font-size: 13px;
-      font-weight: 900;
-    }}
-
     .dataset-save-button-group {{
       display: flex;
       align-items: stretch;
@@ -4642,49 +4651,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
       content: "";
     }}
 
-    .manual-qa-save-target {{
-      display: grid;
-      gap: 2px;
-      align-content: center;
-      min-width: 0;
-      min-height: 0;
-      padding: 0;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 650;
-      line-height: 1.45;
-      overflow-wrap: anywhere;
-    }}
-
-    .manual-qa-save-target small {{
-      color: #5f7390;
-      font-size: 12px;
-      font-weight: 500;
-      max-width: none;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }}
-
-    .manual-qa-save-target strong {{
-      color: var(--ats-blue-dark);
-      font-weight: 760;
-    }}
-
-    .dataset-save-status {{
-      color: #0b2f5b;
-      font-size: 13px;
-      font-weight: 700;
-    }}
-
-    .save-target-title {{
-      color: #0b2f5b;
-      font-weight: 700;
-    }}
-
     .dataset-preview-meta {{
       color: var(--muted);
       font-weight: 600;
@@ -4720,12 +4686,12 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     }}
 
     #datasets .records-table th {{
-      padding: 12px 16px;
-      color: #0b2f5b;
-      background: #f4f8fc;
       position: sticky;
       top: 0;
       z-index: 1;
+      padding: 12px 16px;
+      color: #0b2f5b;
+      background: #eef4f8;
       border-bottom-color: #d8e4f0;
       font-size: 12px;
       font-weight: 700;
@@ -4739,7 +4705,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     }}
 
     #datasets .records-table tbody tr:hover td {{
-      background: #fbfdff;
+      background: #f7fafc;
     }}
 
     .dataset-name-cell {{
@@ -5319,7 +5285,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
                     <span class="dataset-file-icon" aria-hidden="true">▣</span>
                     <span>
                       <strong id="datasetFileName">-</strong>
-                      <small id="datasetFileMeta">0 rows selected</small>
                     </span>
                   </div>
                   <div class="dataset-upload-cell">
@@ -5456,7 +5421,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     const manualQaDatasetSelect = document.getElementById("manualQaDatasetSelect");
     const manualQaResult = document.getElementById("manualQaResult");
     const manualQaButton = manualQaForm ? manualQaForm.querySelector("button[type='submit']") : null;
-    const manualQaSaveTarget = document.getElementById("manualQaSaveTarget");
     const uploadDialog = document.getElementById("uploadDialog");
     const openUploadDialog = document.getElementById("openUploadDialog");
     const closeUploadDialog = document.getElementById("closeUploadDialog");
@@ -5487,8 +5451,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     const runDatasetChoices = document.getElementById("runDatasetChoices");
     const manualQaDatasetPath = document.getElementById("manualQaDatasetPath");
     const datasetFileName = document.getElementById("datasetFileName");
-    const datasetFileMeta = document.getElementById("datasetFileMeta");
-    const datasetSaveStatus = document.getElementById("datasetSaveStatus");
     const manualQaQuestionTextarea = document.getElementById("manualQaQuestionTextarea");
     const manualQaAnswerTextarea = document.getElementById("manualQaAnswerTextarea");
     const manualQaQuestionCount = document.getElementById("manualQaQuestionCount");
@@ -6034,7 +5996,7 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     const reportTranslations = {{
       de: {{"RAG Evaluation": "RAG-Auswertung"}},
       en: {{"RAG Evaluation": "RAG Evaluation"}},
-      zh: {{"RAG Evaluation": "RAG 评估"}},
+      zh: {{"RAG Evaluation": "RAG 璇勪及"}},
       ms: {{"RAG Evaluation": "Penilaian RAG"}}
     }};
 
@@ -6459,7 +6421,6 @@ def render_upload_page(result_reports: list[dict[str, str]] | None = None) -> st
     function updateDatasetFileSummary() {{
       const selectedPath = manualQaDatasetSelect?.value || "";
       if (datasetFileName) datasetFileName.textContent = selectedPath || "-";
-      if (datasetFileMeta) datasetFileMeta.textContent = selectedPath ? "Ready for Q&A save" : "0 rows selected";
     }}
 
     function compactCellText(value, maxLength = 72) {{

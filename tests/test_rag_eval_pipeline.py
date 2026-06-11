@@ -135,6 +135,20 @@ class TestRagEvalPipeline(unittest.TestCase):
             self.assertEqual(eval_cmd[eval_cmd.index("--output-csv") + 1], str(task.eval_result_csv))
             self.assertEqual(eval_cmd[eval_cmd.index("--max-workers") + 1], "3")
 
+    def test_generation_command_uses_retrieval_url_environment_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = sample_config(tmp)
+            config["generation"]["retrieval_url"] = "http://127.0.0.1:9380/api/v1/retrieval"
+            task = pipeline.expand_tasks(config)[0]
+
+            with patch.dict(os.environ, {"RAG_EVAL_RETRIEVAL_URL": "http://retrieval:9380/api/v1/retrieval"}):
+                gen_cmd = pipeline.build_generation_command(config, task)
+
+            self.assertEqual(
+                gen_cmd[gen_cmd.index("--retrieval-url") + 1],
+                "http://retrieval:9380/api/v1/retrieval",
+            )
+
     def test_evaluation_command_includes_configured_max_tokens(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = sample_config(tmp)

@@ -1,24 +1,38 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiClient } from "../api/client";
-import type { DatasetItem, DatasetPreview } from "../api/types";
+import type { DatasetItem, DatasetPreview, RetrievedPassage } from "../api/types";
+import type { LanguageCode, Translate } from "../i18n";
 
 function datasetIdentity(dataset: DatasetItem) {
   return [dataset.source || "", dataset.dataset_id || "", dataset.name || "", dataset.path || ""].join("|");
 }
 
-export function Datasets() {
+function datasetOptionLabel(dataset: DatasetItem, rowsLabel: string) {
+  return `${dataset.name} - ${dataset.path || "-"} (${dataset.rows ?? "-"} ${rowsLabel.toLowerCase()})`;
+}
+
+function isUploadedDatasetArtifact(dataset: DatasetItem) {
+  return (dataset.path || "").replace(/\\/g, "/").includes("/uploaded_datasets/");
+}
+
+type DatasetsProps = {
+  language: LanguageCode;
+  t: Translate;
+};
+
+export function Datasets({ language, t }: DatasetsProps) {
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [selectedDataset, setSelectedDataset] = useState<DatasetItem | null>(null);
   const [preview, setPreview] = useState<DatasetPreview | null>(null);
-  const [uploadName, setUploadName] = useState("");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [question, setQuestion] = useState("");
   const [expectedAnswer, setExpectedAnswer] = useState("");
+  const [retrievedPassages, setRetrievedPassages] = useState<RetrievedPassage[]>([]);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [generatingAnswer, setGeneratingAnswer] = useState(false);
   const [savingQa, setSavingQa] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -90,26 +104,49 @@ export function Datasets() {
     selectedDatasetPathRef.current = selectedDataset?.path ?? null;
   }, [selectedDataset?.path]);
 
+  const visibleDatasets = useMemo(
+    () => datasets.filter((dataset) => !isUploadedDatasetArtifact(dataset)),
+    [datasets]
+  );
+
+  useEffect(() => {
+    if (selectedDataset || visibleDatasets.length === 0) {
+      return;
+    }
+
+    const firstDataset = visibleDatasets[0];
+    selectedDatasetPathRef.current = firstDataset.path ?? null;
+    setSelectedDataset(firstDataset);
+    void loadPreview(firstDataset);
+  }, [loadPreview, selectedDataset, visibleDatasets]);
+
   async function selectDataset(dataset: DatasetItem) {
     selectedDatasetPathRef.current = dataset.path ?? null;
     setSelectedDataset(dataset);
     setNotice("");
+    setRetrievedPassages([]);
     await loadPreview(dataset);
   }
 
-  async function handleUpload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleDatasetSelection(datasetKey: string) {
+    const dataset = visibleDatasets.find((item) => datasetIdentity(item) === datasetKey);
+    if (dataset) {
+      await selectDataset(dataset);
+    }
+  }
+
+  async function handleUploadFile(file: File | null) {
     setNotice("");
     setError("");
 
-    if (!uploadFile) {
-      setError("Choose a dataset file before uploading.");
+    if (!file) {
+      setError(t("chooseDatasetFile"));
       return;
     }
 
     setUploading(true);
     try {
-      const uploadPayload = await apiClient.uploadDataset(uploadName, uploadFile);
+      const uploadPayload = await apiClient.uploadDataset("", file);
       const listPayload = await apiClient.listDatasets();
       const uploadedDataset =
         listPayload.datasets.find(
@@ -129,10 +166,9 @@ export function Datasets() {
       setDatasets(listPayload.datasets);
       selectedDatasetPathRef.current = uploadedDataset.path ?? null;
       setSelectedDataset(uploadedDataset);
-      setUploadName("");
-      setUploadFile(null);
       setFileInputKey((current) => current + 1);
-      setNotice(`Uploaded ${uploadPayload.dataset_name}`);
+      setRetrievedPassages([]);
+      setNotice(`${t("uploaded")} ${uploadPayload.dataset_name}`);
       await loadPreview(uploadedDataset);
     } catch (exc) {
       setError((exc as Error).message);
@@ -141,31 +177,57 @@ export function Datasets() {
     }
   }
 
+  async function handleGenerateAnswer() {
+    setNotice("");
+    setError("");
+
+    const cleanQuestion = question.trim();
+    if (!cleanQuestion) {
+      setError(t("enterQuestionBeforeGenerating"));
+      return;
+    }
+
+    setGeneratingAnswer(true);
+    try {
+      const payload = await apiClient.generateAnswer(cleanQuestion, language);
+      setExpectedAnswer(payload.expected_answer || "");
+      setRetrievedPassages(payload.passages || []);
+      setNotice(t("generatedAnswer"));
+    } catch (exc) {
+      setError((exc as Error).message);
+    } finally {
+      setGeneratingAnswer(false);
+    }
+  }
+
   async function handleSaveManualQa(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNotice("");
     setError("");
 
-    if (!selectedDataset?.path) {
-      setError("Select a dataset before saving Q&A.");
+    const targetDatasetPath = selectedDataset?.path || "";
+
+    if (!targetDatasetPath) {
+      setError(t("selectDatasetBeforeSaving"));
       return;
     }
 
     if (!question.trim() || !expectedAnswer.trim()) {
-      setError("Enter both a question and expected answer.");
+      setError(t("enterQuestionAndAnswer"));
       return;
     }
 
     setSavingQa(true);
-    const savedDataset = selectedDataset;
+    const selectedPreviewDataset = selectedDataset;
     try {
-      const payload = await apiClient.saveManualQa(savedDataset.path, question.trim(), expectedAnswer.trim());
+      const payload = await apiClient.saveManualQa(targetDatasetPath, question.trim(), expectedAnswer.trim());
       setQuestion("");
       setExpectedAnswer("");
+      setRetrievedPassages([]);
       setNotice(`Saved ${payload.appended_query_id}`);
       await loadDatasets();
-      if (selectedDatasetPathRef.current === savedDataset.path) {
-        await loadPreview(savedDataset);
+      if (selectedPreviewDataset && selectedDatasetPathRef.current === targetDatasetPath) {
+        await loadPreview(selectedPreviewDataset);
       }
     } catch (exc) {
       setError((exc as Error).message);
@@ -175,107 +237,143 @@ export function Datasets() {
   }
 
   const canSaveQa = Boolean(selectedDataset?.path && question.trim() && expectedAnswer.trim() && !savingQa);
-  const selectedDatasetIdentity = selectedDataset ? datasetIdentity(selectedDataset) : null;
-
+  const canGenerateAnswer = Boolean(question.trim() && !generatingAnswer);
   return (
-    <section className="section-panel">
-      <h1>Datasets</h1>
+    <section className="section-panel datasets-page">
       {error ? <p className="error-text">{error}</p> : null}
       {notice ? <p className="notice-text">{notice}</p> : null}
 
-      <form className="toolbar-row" onSubmit={handleUpload}>
-        <input
-          aria-label="Dataset name"
-          disabled={uploading}
-          onChange={(event) => setUploadName(event.target.value)}
-          placeholder="Dataset name (optional)"
-          value={uploadName}
-        />
-        <label className={uploading ? "file-picker-button disabled" : "file-picker-button"}>
-          <span>Choose file</span>
-          <input
-            aria-label="Dataset file"
-            accept=".csv,.pdf,text/csv,application/pdf"
-            className="hidden-file-input"
-            disabled={uploading}
-            key={fileInputKey}
-            onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
-            type="file"
-          />
-        </label>
-        <span className="file-picker-name">{uploadFile?.name ?? "No file selected"}</span>
-        <button disabled={uploading} type="submit">
-          {uploading ? "Uploading..." : "Upload dataset"}
-        </button>
-      </form>
-
-      <div className="datasets-layout">
-        <div aria-busy={loadingDatasets} className="data-table">
-          {datasets.map((dataset) => (
-            <button
-              aria-label={`${dataset.name} ${dataset.path} ${dataset.rows ?? "-"} rows`}
-              className={
-                selectedDatasetIdentity === datasetIdentity(dataset)
-                  ? "data-row button-row active"
-                  : "data-row button-row"
-              }
-              key={datasetIdentity(dataset)}
-              onClick={() => void selectDataset(dataset)}
-              type="button"
+      <div className="datasets-layout datasets-d2-layout">
+        <div className="dataset-control-bar dataset-console-card surface-panel" aria-busy={loadingDatasets}>
+          <label>
+            <span>Use dataset</span>
+            <select
+              aria-label="Use dataset"
+              className="dataset-select"
+              disabled={loadingDatasets || visibleDatasets.length === 0}
+              onChange={(event) => void handleDatasetSelection(event.target.value)}
+              value={selectedDataset ? datasetIdentity(selectedDataset) : ""}
             >
-              <span className="dataset-row-main">
-                <strong className="dataset-row-name">{dataset.name}</strong>
-                <span className="dataset-row-count">Rows: {dataset.rows ?? "-"}</span>
-              </span>
-              <span className="dataset-row-path" title={dataset.path}>
-                {dataset.path}
-              </span>
-            </button>
-          ))}
-          {!loadingDatasets && datasets.length === 0 ? <p>No datasets found.</p> : null}
+              {visibleDatasets.map((dataset) => (
+                <option key={datasetIdentity(dataset)} value={datasetIdentity(dataset)}>
+                  {datasetOptionLabel(dataset, t("rows"))}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={uploading ? "file-picker-button upload-file-action disabled" : "file-picker-button upload-file-action"}>
+            <span>{uploading ? t("uploading") : t("uploadDataset")}</span>
+            <input
+              aria-label="Dataset file"
+              accept=".csv,.pdf,text/csv,application/pdf"
+              className="hidden-file-input"
+              disabled={uploading}
+              key={fileInputKey}
+              onChange={(event) => void handleUploadFile(event.target.files?.[0] ?? null)}
+              type="file"
+            />
+          </label>
+          {!loadingDatasets && visibleDatasets.length === 0 ? <p>{t("noDatasetsFound")}</p> : null}
         </div>
 
-        <div className="dataset-detail-panel">
-          <div aria-busy={loadingPreview} className="dataset-preview-panel">
-            <h2>{selectedDataset ? selectedDataset.name : "Preview"}</h2>
-            {selectedDataset?.path ? (
-              <p className="muted-text">{selectedDataset.path}</p>
-            ) : (
-              <p className="muted-text">Select a dataset to preview rows.</p>
-            )}
-            {preview ? <p>{preview.rows} rows</p> : null}
-            {preview && preview.preview_rows.length > 0 ? (
-              <div className="preview-table">
-                {preview.preview_rows.map((row, index) => (
-                  <div className="preview-row" key={`${row.query_id || "row"}-${index}`}>
-                    <strong>{row.query_id || `row_${index + 1}`}</strong>
-                    <span>{row.query || "-"}</span>
-                    <span>{row.expected_answer || "-"}</span>
-                  </div>
-                ))}
+        <div className="dataset-workspace-panel">
+          <form className="manual-qa-form-panel manual-qa-card primary-qa-panel surface-panel" onSubmit={handleSaveManualQa}>
+            <h2>{t("manualQa")}</h2>
+            <div className="manual-qa-primary-grid manual-qa-symmetric-grid">
+              <div className="manual-qa-column question-column">
+                <label className="qa-main-field">
+                  <span>{t("question")}</span>
+                  <textarea
+                    aria-label="Question"
+                    className="qa-main-textarea"
+                    onChange={(event) => {
+                      setQuestion(event.target.value);
+                      setRetrievedPassages([]);
+                    }}
+                    value={question}
+                  />
+                </label>
+                <div className="qa-field-action-row manual-qa-generation-actions">
+                  <button
+                    className="manual-qa-secondary-action manual-qa-generate-action"
+                    disabled={!canGenerateAnswer}
+                    onClick={() => void handleGenerateAnswer()}
+                    type="button"
+                  >
+                    {generatingAnswer ? t("generating") : t("generateAnswer")}
+                  </button>
+                </div>
               </div>
-            ) : null}
-            {preview && preview.preview_rows.length === 0 ? <p>No preview rows found.</p> : null}
-          </div>
-
-          <form className="manual-qa-form-panel" onSubmit={handleSaveManualQa}>
-            <h2>Manual Q&A</h2>
-            <label>
-              <span>Question</span>
-              <textarea aria-label="Question" onChange={(event) => setQuestion(event.target.value)} value={question} />
-            </label>
-            <label>
-              <span>Expected answer</span>
-              <textarea
-                aria-label="Expected answer"
-                onChange={(event) => setExpectedAnswer(event.target.value)}
-                value={expectedAnswer}
-              />
-            </label>
-            <button disabled={!canSaveQa} type="submit">
-              {savingQa ? "Saving..." : "Save Q&A"}
-            </button>
+              <div className="manual-qa-column-divider" aria-hidden="true" />
+              <div className="manual-qa-column answer-column">
+                <label className="qa-main-field">
+                  <span>{t("expectedAnswer")}</span>
+                  <textarea
+                    aria-label="Expected answer"
+                    className="qa-main-textarea"
+                    onChange={(event) => setExpectedAnswer(event.target.value)}
+                    value={expectedAnswer}
+                  />
+                </label>
+                <div className="qa-field-action-row manual-qa-save-actions">
+                  <button className="manual-qa-save-action" disabled={!canSaveQa} type="submit">
+                    {savingQa ? t("saving") : t("saveQa")}
+                  </button>
+                </div>
+              </div>
+            </div>
           </form>
+          <div className="dataset-disclosure-stack">
+            <details className="dataset-details-panel auxiliary-panel">
+                <summary>{selectedDataset ? `${t("preview")}: ${selectedDataset.name}` : t("preview")}</summary>
+                <div aria-busy={loadingPreview} className="dataset-preview-panel">
+                  <h2>{selectedDataset ? selectedDataset.name : t("preview")}</h2>
+                  {selectedDataset?.path ? (
+                    <p className="muted-text">{selectedDataset.path}</p>
+                  ) : (
+                    <p className="muted-text">{t("selectDatasetPreview")}</p>
+                  )}
+                  {preview ? (
+                    <p>
+                      {preview.rows} {t("rows")}
+                    </p>
+                  ) : null}
+                  {preview && preview.preview_rows.length > 0 ? (
+                    <div className="preview-table">
+                      {preview.preview_rows.map((row, index) => (
+                        <div className="preview-row" key={`${row.query_id || "row"}-${index}`}>
+                          <strong>{row.query_id || `row_${index + 1}`}</strong>
+                          <span>{row.query || "-"}</span>
+                          <span>{row.expected_answer || "-"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {preview && preview.preview_rows.length === 0 ? <p>{t("noPreviewRows")}</p> : null}
+                </div>
+              </details>
+              <details className="retrieved-passages-panel auxiliary-panel" open={retrievedPassages.length > 0}>
+                <summary>{t("retrievedPassages")}</summary>
+                {retrievedPassages.length > 0 ? (
+                  <div className="retrieved-passages-list">
+                    {retrievedPassages.map((passage, index) => (
+                      <article className="retrieved-passage-item" key={`${passage.id || passage.source || "passage"}-${index}`}>
+                        <strong>{passage.id || passage.source || `passage_${index + 1}`}</strong>
+                        <p>{String(passage.text || passage.content || "")}</p>
+                        {passage.score !== undefined || passage.source ? (
+                          <span>
+                            {passage.source ? String(passage.source) : ""}
+                            {passage.score !== undefined ? ` score ${Number(passage.score).toFixed(3)}` : ""}
+                          </span>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted-text">{t("noRetrievedPassages")}</p>
+                )}
+              </details>
+          </div>
         </div>
       </div>
     </section>

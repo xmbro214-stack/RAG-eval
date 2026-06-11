@@ -33,12 +33,6 @@ def create_app(
             allow_headers=["*"],
         )
 
-    app.include_router(reports.router)
-    app.include_router(datasets.router)
-    app.include_router(retrieval.router)
-    app.include_router(pipeline.router)
-    app.include_router(chat.router)
-
     @app.get("/api/health")
     def health() -> dict[str, object]:
         return {"ok": True, "service": "rag-eval-api"}
@@ -52,8 +46,18 @@ def create_app(
 
         @app.get("/")
         @app.get("/datasets")
+        @app.get("/run")
+        @app.get("/records")
+        @app.get("/reports")
+        @app.get("/overview")
         def frontend_index() -> FileResponse:
             return FileResponse(index_html)
+
+    app.include_router(reports.router)
+    app.include_router(datasets.router)
+    app.include_router(retrieval.router)
+    app.include_router(pipeline.router)
+    app.include_router(chat.router)
 
     return app
 
